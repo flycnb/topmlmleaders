@@ -205,7 +205,7 @@ export default function App(){
   ];
 
   return(
-    <div style={{maxWidth:680,margin:"0 auto",fontFamily:"system-ui,sans-serif",background:"#f8f8f8",minHeight:"100vh"}}>
+    <div style={{maxWidth:1400,margin:"0 auto",fontFamily:"system-ui,sans-serif",background:"#f8f8f8",minHeight:"100vh"}}>
       <div style={{padding:"16px 16px 0",background:"#fff",borderBottom:"0.5px solid #eee"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div>
@@ -326,7 +326,7 @@ export default function App(){
       </div>
 
       {/* Bottom Nav */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:680,background:"#fff",borderTop:"0.5px solid #eee",display:"flex",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:1400,background:"#fff",borderTop:"0.5px solid #eee",display:"flex",zIndex:100}}>
         {tabs.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 14px",background:"none",border:"none",cursor:"pointer",color:tab===t.id?"#7F77DD":"#999"}}>
             <span style={{fontSize:18}}>{t.icon}</span>
