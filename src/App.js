@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+import Auth from "./Auth";
 /* eslint-disable */
 import { useState } from "react";
 // TopMLMLeaders.com — Full App
