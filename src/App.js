@@ -2,10 +2,14 @@
 // TopMLMLeaders.com — Final Complete Version
 
 import { useState, useEffect } from "react";
+import { supabase } from "./lib/supabaseClient";
+import { useFollow } from "./hooks/useFollow";
+import { useChat } from "./hooks/useChat";
+import { useNotifications } from "./hooks/useNotifications";
+import { useAuth } from "./hooks/useAuth";
 
 const HISTORY_HOME = { view: "home", tab: "directory" };
-
-const ACCOUNTS_KEY = "topmlm_accounts";
+const SITE_URL = process.env.REACT_APP_SITE_URL || window.location.origin;
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -20,29 +24,7 @@ function isEmailFormatValid(raw) {
   const domain = e.slice(at + 1);
   if (!local || !domain || !domain.includes(".")) return false;
   const lastDot = domain.lastIndexOf(".");
-  if (lastDot <= 0 || lastDot === domain.length - 1) return false;
-  return true;
-}
-
-function readAccounts() {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
-  return {};
-}
-
-function writeAccounts(acc) {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(acc));
-}
-
-function ensureDefaultAdminAccount() {
-  const acc = readAccounts();
-  const adminMail = "admin@topmlmleaders.com";
-  if (!acc[adminMail]) {
-    acc[adminMail] = { password: "admin123", name: "Admin" };
-    writeAccounts(acc);
-  }
+  return !(lastDot <= 0 || lastDot === domain.length - 1);
 }
 
 const MEMBERS = [
@@ -133,7 +115,7 @@ function JoinForm({m,onClose}){
   </div>;
 }
 
-function PersonalWebsite({m,onHome,onChat}){
+function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoading}){
   const [tab,setTab]=useState("about");
   const [joinOpen,setJoinOpen]=useState(false);
   const [bookOpen,setBookOpen]=useState(false);
@@ -158,8 +140,20 @@ function PersonalWebsite({m,onHome,onChat}){
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:10,flexWrap:"wrap"}}>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#fff",border:"1px solid rgba(255,255,255,0.4)"}}>💰 {m.earnings}</div>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#fff",border:"1px solid rgba(255,255,255,0.4)"}}>👥 {m.team}</div>
+          <div style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:700}}>👤 {(m.followerCount||0).toLocaleString()} followers</div>
           {m.plan==="elite"&&avail>0&&<div style={{background:"rgba(255,255,255,0.25)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:600}}>📅 {avail} slots</div>}
         </div>
+        <div style={{marginTop:10,display:"flex",justifyContent:"center"}}>
+          <button
+            type="button"
+            onClick={()=>onToggleFollow?.(m)}
+            disabled={followLoading}
+            style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #fff":"none",borderRadius:20,padding:"7px 18px",fontWeight:700,fontSize:13,cursor:"pointer"}}
+          >
+            {isFollowing?"Following":"Follow"}
+          </button>
+        </div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",marginTop:6}}>{(m.followerCount||0).toLocaleString()} people follow this leader</div>
         <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:8}}>🔗 topmlmleaders.com/{m.slug}</div>
       </div>
     </div>
@@ -254,10 +248,14 @@ function PersonalWebsite({m,onHome,onChat}){
   </div>;
 }
 
-function ChatModal({m,onClose}){
+function ChatModal({m,onClose,user}){
   const [msg,setMsg]=useState("");
-  const [msgs,setMsgs]=useState([{from:"them",text:`Hi! I'm ${m.name}. How can I help?`}]);
-  const send=()=>{if(!msg.trim())return;setMsgs(p=>[...p,{from:"me",text:msg}]);setTimeout(()=>setMsgs(p=>[...p,{from:"them",text:"Thanks! I'll connect soon."}]),800);setMsg("");};
+  const { messages, sendMessage } = useChat(user, m);
+  const send=async()=>{
+    if(!msg.trim())return;
+    await sendMessage(msg);
+    setMsg("");
+  };
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
     <div style={{background:"#fff",borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,maxHeight:"70vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
       <div style={{padding:"14px 16px",borderBottom:"0.5px solid #eee",display:"flex",alignItems:"center",gap:10}}>
@@ -266,17 +264,18 @@ function ChatModal({m,onClose}){
         <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#888"}}>✕</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:10}}>
-        {msgs.map((m2,i)=><div key={i} style={{display:"flex",justifyContent:m2.from==="me"?"flex-end":"flex-start"}}><div style={{background:m2.from==="me"?m.color+"22":"#f5f5f5",borderRadius:m2.from==="me"?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",maxWidth:"75%",fontSize:13}}>{m2.text}</div></div>)}
+        {messages.length===0&&<div style={{fontSize:12,color:"#999",textAlign:"center",paddingTop:10}}>Start conversation with {m.name}</div>}
+        {messages.map((m2)=><div key={m2.id} style={{display:"flex",justifyContent:String(m2.sender_id)===String(user?.id)?"flex-end":"flex-start"}}><div style={{background:String(m2.sender_id)===String(user?.id)?m.color+"22":"#f5f5f5",borderRadius:String(m2.sender_id)===String(user?.id)?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",maxWidth:"75%",fontSize:13}}><div>{m2.text}</div><div style={{fontSize:10,color:"#999",marginTop:3,textAlign:"right"}}>{new Date(m2.created_at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</div></div></div>)}
       </div>
       <div style={{padding:12,borderTop:"0.5px solid #eee",display:"flex",gap:8}}>
         <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Type a message..." style={{flex:1,fontSize:14,borderRadius:20,padding:"8px 14px",border:"1px solid #ddd",outline:"none"}}/>
-        <button onClick={send} style={{background:m.color,color:"#fff",border:"none",borderRadius:20,padding:"8px 16px",fontWeight:700,cursor:"pointer"}}>Send</button>
+        <button onClick={send} disabled={!user} style={{background:m.color,color:"#fff",border:"none",borderRadius:20,padding:"8px 16px",fontWeight:700,cursor:"pointer",opacity:user?1:0.5}}>Send</button>
       </div>
     </div>
   </div>;
 }
 
-function AuthModal({ onClose, onLogin }) {
+function AuthModal({ onClose, onSuccess }) {
   const [mode, setMode] = useState("login");
   const [phase, setPhase] = useState("auth");
   const [email, setEmail] = useState("");
@@ -286,6 +285,7 @@ function AuthModal({ onClose, onLogin }) {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotMsg, setForgotMsg] = useState("");
   const [forgotErr, setForgotErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const switchMode = (m) => {
     setMode(m);
@@ -300,29 +300,34 @@ function AuthModal({ onClose, onLogin }) {
     setMsg("");
   };
 
-  const backToAuth = () => {
-    setPhase("auth");
-    setForgotMsg("");
-    setForgotErr("");
-  };
-
-  const submitForgot = () => {
+  const submitForgot = async () => {
     setForgotErr("");
     setForgotMsg("");
     if (!isEmailFormatValid(forgotEmail)) {
       setForgotErr("Please enter a valid email address");
       return;
     }
-    const em = normalizeEmail(forgotEmail);
-    const accounts = readAccounts();
-    if (!accounts[em]) {
-      setForgotErr("No account found for this email");
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+      redirectTo: SITE_URL,
+    });
+    if (error) {
+      setForgotErr(error.message || "Unable to send reset email");
       return;
     }
-    setForgotMsg(`Reset instructions sent to ${em}. Check your inbox.`);
+    setForgotMsg(`Reset instructions sent to ${forgotEmail.trim()}.`);
   };
 
-  const handle = () => {
+  const upsertPublicUser = async (u, fallbackName) => {
+    if (!u?.id) return;
+    await supabase.from("users").upsert({
+      id: u.id,
+      name: fallbackName || u.user_metadata?.name || u.email?.split("@")[0] || "User",
+      email: u.email || "",
+      plan: "free",
+    });
+  };
+
+  const handle = async () => {
     setMsg("");
     if (!email.trim() || !pass) {
       setMsg("Please fill all fields");
@@ -336,54 +341,72 @@ function AuthModal({ onClose, onLogin }) {
       setMsg("Password must be at least 6 characters");
       return;
     }
-    const em = normalizeEmail(email);
-    const accounts = readAccounts();
-    if (mode === "signup") {
-      if (!name.trim()) {
-        setMsg("Please enter your full name");
+
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        if (!name.trim()) {
+          setMsg("Please enter your full name");
+          return;
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: pass,
+          options: { data: { name: name.trim() } },
+        });
+        if (error) {
+          setMsg(error.message || "Signup failed");
+          return;
+        }
+        if (data?.user) {
+          await upsertPublicUser(data.user, name.trim());
+        }
+        if (!data?.session) {
+          setMsg("Signup successful. Check your email to confirm your account.");
+          return;
+        }
+        onSuccess?.();
+        onClose();
         return;
       }
-      if (accounts[em]) {
-        setMsg("An account with this email already exists");
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: pass,
+      });
+      if (error) {
+        if ((error.message || "").toLowerCase().includes("invalid login credentials")) {
+          setMsg("Incorrect password");
+        } else {
+          setMsg(error.message || "Login failed");
+        }
         return;
       }
-      accounts[em] = { password: pass, name: name.trim() };
-      writeAccounts(accounts);
-      onLogin({ name: name.trim(), email: em, plan: "free" });
+      if (data?.user) {
+        await upsertPublicUser(data.user);
+      }
+      onSuccess?.();
       onClose();
-      return;
+    } finally {
+      setBusy(false);
     }
-    const rec = accounts[em];
-    if (!rec) {
-      setMsg("No account found for this email");
-      return;
+  };
+
+  const loginWithGoogle = async () => {
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: SITE_URL },
+    });
+    if (error) {
+      setMsg(error.message || "Google login failed");
+      setBusy(false);
     }
-    if (rec.password !== pass) {
-      setMsg("Incorrect password");
-      return;
-    }
-    onLogin({ name: rec.name || em.split("@")[0], email: em, plan: "free" });
-    onClose();
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        zIndex: 2000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 380, padding: 28 }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 380, padding: 28 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#7F77DD" }}>🌐 TopMLMLeaders</div>
           <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>Find · Connect · Grow Worldwide</div>
@@ -392,183 +415,26 @@ function AuthModal({ onClose, onLogin }) {
         {phase === "forgot" ? (
           <>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>Reset password</div>
-            <div style={{ fontSize: 13, color: "#666", marginBottom: 14, lineHeight: 1.5 }}>
-              Enter your email and we&apos;ll send reset instructions.
-            </div>
-            <input
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
-              placeholder="Email address"
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 10,
-                border: "1.5px solid #ddd",
-                fontSize: 14,
-                marginBottom: 12,
-                boxSizing: "border-box",
-                outline: "none",
-              }}
-            />
-            {forgotErr && (
-              <div style={{ fontSize: 13, color: "#E24B4A", marginBottom: 12, textAlign: "center" }}>{forgotErr}</div>
-            )}
-            {forgotMsg && (
-              <div style={{ fontSize: 13, color: "#1D9E75", marginBottom: 12, textAlign: "center", fontWeight: 600 }}>
-                {forgotMsg}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={submitForgot}
-              style={{
-                width: "100%",
-                background: "#7F77DD",
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "13px",
-                fontWeight: 700,
-                fontSize: 15,
-                cursor: "pointer",
-                marginBottom: 10,
-              }}
-            >
-              Send reset link →
-            </button>
-            <button
-              type="button"
-              onClick={backToAuth}
-              style={{
-                width: "100%",
-                background: "#fff",
-                color: "#666",
-                border: "1.5px solid #ddd",
-                borderRadius: 10,
-                padding: "12px",
-                fontWeight: 600,
-                fontSize: 14,
-                cursor: "pointer",
-              }}
-            >
-              ← Back to login
-            </button>
+            <input value={forgotEmail} onChange={(e)=>setForgotEmail(e.target.value)} placeholder="Email address" style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, marginBottom: 12, boxSizing: "border-box", outline: "none" }}/>
+            {forgotErr && <div style={{ fontSize: 13, color: "#E24B4A", marginBottom: 12, textAlign: "center" }}>{forgotErr}</div>}
+            {forgotMsg && <div style={{ fontSize: 13, color: "#1D9E75", marginBottom: 12, textAlign: "center", fontWeight: 600 }}>{forgotMsg}</div>}
+            <button type="button" onClick={submitForgot} style={{ width: "100%", background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>Send reset link →</button>
+            <button type="button" onClick={()=>setPhase("auth")} style={{ width: "100%", background: "#fff", color: "#666", border: "1.5px solid #ddd", borderRadius: 10, padding: "12px", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>← Back to login</button>
           </>
         ) : (
           <>
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               {["login", "signup"].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => switchMode(m)}
-                  style={{
-                    flex: 1,
-                    background: mode === m ? "#7F77DD" : "#f5f5f5",
-                    color: mode === m ? "#fff" : "#666",
-                    border: "none",
-                    borderRadius: 10,
-                    padding: "10px",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    cursor: "pointer",
-                  }}
-                >
-                  {m === "login" ? "Login" : "Sign Up"}
-                </button>
+                <button key={m} type="button" onClick={() => switchMode(m)} style={{ flex: 1, background: mode === m ? "#7F77DD" : "#f5f5f5", color: mode === m ? "#fff" : "#666", border: "none", borderRadius: 10, padding: "10px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{m === "login" ? "Login" : "Sign Up"}</button>
               ))}
             </div>
-            {mode === "signup" && (
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your Full Name"
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  border: "1.5px solid #ddd",
-                  fontSize: 14,
-                  marginBottom: 12,
-                  boxSizing: "border-box",
-                  outline: "none",
-                }}
-              />
-            )}
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address"
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 10,
-                border: "1.5px solid #ddd",
-                fontSize: 14,
-                marginBottom: 12,
-                boxSizing: "border-box",
-                outline: "none",
-              }}
-            />
-            <input
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              type="password"
-              placeholder="Password (min. 6 characters)"
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 10,
-                border: "1.5px solid #ddd",
-                fontSize: 14,
-                marginBottom: mode === "login" ? 8 : 16,
-                boxSizing: "border-box",
-                outline: "none",
-              }}
-            />
-            {mode === "login" && (
-              <button
-                type="button"
-                onClick={openForgot}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "right",
-                  background: "none",
-                  border: "none",
-                  color: "#7F77DD",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  marginBottom: 14,
-                  padding: 0,
-                }}
-              >
-                Forgot Password?
-              </button>
-            )}
-            {msg && (
-              <div style={{ fontSize: 13, color: "#E24B4A", marginBottom: 12, textAlign: "center" }}>{msg}</div>
-            )}
-            <button
-              type="button"
-              onClick={handle}
-              style={{
-                width: "100%",
-                background: "#7F77DD",
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "13px",
-                fontWeight: 700,
-                fontSize: 15,
-                cursor: "pointer",
-                marginBottom: 12,
-              }}
-            >
-              {mode === "login" ? "Login →" : "Create Account →"}
-            </button>
-            <div style={{ fontSize: 12, color: "#999", textAlign: "center", lineHeight: 1.5 }}>Google login coming soon</div>
+            {mode === "signup" && <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Your Full Name" style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, marginBottom: 12, boxSizing: "border-box", outline: "none" }} />}
+            <input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="Email address" style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, marginBottom: 12, boxSizing: "border-box", outline: "none" }} />
+            <input value={pass} onChange={(e)=>setPass(e.target.value)} type="password" placeholder="Password (min. 6 characters)" style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, marginBottom: mode === "login" ? 8 : 16, boxSizing: "border-box", outline: "none" }} />
+            {mode === "login" && <button type="button" onClick={openForgot} style={{ display: "block", width: "100%", textAlign: "right", background: "none", border: "none", color: "#7F77DD", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 14, padding: 0 }}>Forgot Password?</button>}
+            {msg && <div style={{ fontSize: 13, color: "#E24B4A", marginBottom: 12, textAlign: "center" }}>{msg}</div>}
+            <button type="button" disabled={busy} onClick={handle} style={{ width: "100%", background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 12, opacity: busy ? 0.6 : 1 }}>{mode === "login" ? "Login →" : "Create Account →"}</button>
+            <button type="button" onClick={loginWithGoogle} disabled={busy} style={{ width: "100%", background: "#fff", color: "#333", border: "1.5px solid #ddd", borderRadius: 10, padding: "12px", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Continue with Google</button>
           </>
         )}
       </div>
@@ -576,7 +442,7 @@ function AuthModal({ onClose, onLogin }) {
   );
 }
 
-function MemberDashboard({user,onHome}){
+function MemberDashboard({user,onHome,membersData,onOpenChat}){
   const [tab,setTab]=useState("overview");
   const [messages,setMessages]=useState([
     {id:1,from:"Priya Sharma",photo:"PS",color:"#D4537E",text:"Hi! Interested in joining your team...",time:"2h ago",read:false},
@@ -584,9 +450,29 @@ function MemberDashboard({user,onHome}){
     {id:3,from:"Amit Patel",photo:"AP",color:"#1D9E75",text:"Loved your profile! Let's collaborate.",time:"1d ago",read:true},
     {id:4,from:"Deepa Nair",photo:"DN",color:"#993C1D",text:"Are you open to new opportunities?",time:"2d ago",read:true},
   ]);
-  const [bookmarks,setBookmarks]=useState(MEMBERS.slice(1,4));
+  const [bookmarks,setBookmarks]=useState((membersData||[]).slice(1,4));
+  const [conversationList,setConversationList]=useState([]);
   const unread=messages.filter(m=>!m.read).length;
   const markRead=id=>setMessages(prev=>prev.map(m=>m.id===id?{...m,read:true}:m));
+
+  useEffect(()=>{
+    if(!user?.id) return;
+    let active=true;
+    const loadConversations=async()=>{
+      const { data } = await supabase
+        .from("conversations")
+        .select("*")
+        .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
+        .order("last_message_time",{ascending:false});
+      if(active) setConversationList(data||[]);
+    };
+    loadConversations();
+    const channel = supabase
+      .channel(`dashboard-conversations-${user.id}`)
+      .on("postgres_changes",{event:"*",schema:"public",table:"conversations"},()=>loadConversations())
+      .subscribe();
+    return ()=>{ active=false; supabase.removeChannel(channel); };
+  },[user?.id]);
   return <div style={{position:"fixed",inset:0,background:"#f8f8f8",zIndex:1500,overflowY:"auto",fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px 80px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -636,6 +522,11 @@ function MemberDashboard({user,onHome}){
         </div>)}
       </div>}
       {tab==="messages"&&<div>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:10}}>Realtime Conversations</div>
+        {conversationList.map((c)=><button key={c.id} type="button" onClick={()=>{const otherId=String(c.member1_id)===String(user.id)?c.member2_id:c.member1_id; const target=(membersData||[]).find(x=>String(x.id)===String(otherId)); if(target) onOpenChat?.(target);}} style={{width:"100%",textAlign:"left",background:"#fff",border:"0.5px solid #eee",borderRadius:12,padding:12,marginBottom:8,cursor:"pointer"}}>
+          <div style={{fontSize:13,fontWeight:700}}>{c.last_message||"Open chat"}</div>
+          <div style={{fontSize:11,color:"#999",marginTop:4}}>{c.last_message_time?new Date(c.last_message_time).toLocaleString():""}</div>
+        </button>)}
         <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>💬 Messages {unread>0&&<span style={{background:"#E24B4A",color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:12,fontWeight:700,marginLeft:6}}>{unread} new</span>}</div>
         {messages.map(msg=><div key={msg.id} onClick={()=>markRead(msg.id)} style={{background:msg.read?"#fff":"#7F77DD06",borderRadius:12,padding:14,marginBottom:10,display:"flex",gap:12,alignItems:"center",boxShadow:"0 1px 6px rgba(0,0,0,0.06)",cursor:"pointer",border:msg.read?"0.5px solid #eee":"1.5px solid #7F77DD44"}}>
           <Avatar initials={msg.photo} color={msg.color} size={44}/>
@@ -675,9 +566,13 @@ function MemberDashboard({user,onHome}){
   </div>;
 }
 
-function AdminPanel({onHome}){
+function AdminPanel({onHome,membersData}){
   const [tab,setTab]=useState("overview");
-  const [members,setMembers]=useState(MEMBERS);
+  const [members,setMembers]=useState(membersData||[]);
+
+  useEffect(()=>{
+    setMembers(membersData||[]);
+  },[membersData]);
   return <div style={{position:"fixed",inset:0,background:"#0f172a",zIndex:1500,overflowY:"auto",fontFamily:"system-ui,sans-serif"}}>
     <div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px 80px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
@@ -755,7 +650,7 @@ function AdminPanel({onHome}){
   </div>;
 }
 
-function MemberCard({m,onView,onChat,setShareOpen}){
+function MemberCard({m,onView,onChat,setShareOpen,onToggleFollow,isFollowing,followLoading}){
   const [bookmarked,setBookmarked]=useState(false);
   const [liked,setLiked]=useState(false);
   const [flagged,setFlagged]=useState(false);
@@ -772,6 +667,7 @@ function MemberCard({m,onView,onChat,setShareOpen}){
     <div style={{padding:"0 12px",marginTop:-26,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
       <Avatar initials={m.photo} color={m.color} size={52}/>
       <div style={{display:"flex",gap:4,paddingBottom:2}}>
+        <div style={{fontSize:10,background:"#eef2ff",border:`0.5px solid ${m.color}44`,borderRadius:20,padding:"2px 7px",color:m.color,fontWeight:700}}>👤 {m.followerCount||0}</div>
         <div style={{fontSize:10,background:"#f5f5f5",border:`0.5px solid ${m.color}33`,borderRadius:20,padding:"2px 7px",color:m.color,fontWeight:600}}>👥 {m.team}</div>
         <div style={{fontSize:10,background:"#f0fdf4",border:"0.5px solid #1D9E7533",borderRadius:20,padding:"2px 7px",color:"#1D9E75",fontWeight:600}}>💰 {m.earnings}</div>
       </div>
@@ -786,6 +682,17 @@ function MemberCard({m,onView,onChat,setShareOpen}){
       <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}><Stars rating={m.rating}/><span style={{fontSize:10,color:"#666"}}>{m.rating} ({m.reviews})</span></div>
       <p style={{fontSize:11,color:"#666",margin:"0 0 6px",lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{m.desc}</p>
       <div style={{fontSize:10,color:m.color,fontWeight:600,background:m.color+"10",borderRadius:20,padding:"2px 8px",display:"inline-block",marginBottom:8,border:`0.5px solid ${m.color}33`}}>🔗 topmlmleaders.com/{m.slug}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{fontSize:11,color:"#666"}}>{m.followerCount||0} people follow this leader</div>
+        <button
+          type="button"
+          onClick={()=>onToggleFollow?.(m)}
+          disabled={followLoading}
+          style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #7F77DD":"none",borderRadius:20,padding:"4px 10px",fontWeight:700,fontSize:11,cursor:"pointer"}}
+        >
+          {isFollowing?"Following":"Follow"}
+        </button>
+      </div>
       <div style={{display:"flex",justifyContent:"space-between",borderTop:`0.5px solid ${m.color}22`,paddingTop:8,marginBottom:8}}>
         <Btn icon="👍" count={liked?m.likes+1:m.likes} color={liked?"#7F77DD":undefined} onClick={()=>setLiked(!liked)}/>
         <Btn icon="🚩" count={m.flags+(flagged?1:0)} color={flagged?"#E24B4A":undefined} onClick={()=>setFlagged(!flagged)}/>
@@ -832,6 +739,70 @@ function ShareSheet({m,onClose}){
   </div>;
 }
 
+function OnboardingModal({ user, onClose, onCreated }) {
+  const [form, setForm] = useState({
+    name: user?.name || "",
+    city: "",
+    company: "",
+    role: "",
+    wa: "",
+  });
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!form.name.trim() || !form.city.trim() || !form.company.trim() || !form.role.trim()) {
+      setMsg("Please fill all required fields");
+      return;
+    }
+    setBusy(true);
+    setMsg("");
+    const slugBase = `${form.name}-${form.city}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const slug = `${slugBase}-${Math.random().toString(36).slice(2, 6)}`;
+    const { error } = await supabase.from("members").insert({
+      name: form.name.trim(),
+      email: user?.email || "",
+      city: form.city.trim(),
+      country: "India",
+      company: form.company.trim(),
+      role: form.role.trim(),
+      wa: form.wa.trim() || "private",
+      phone: "private",
+      photo_initials: form.name.trim().slice(0, 2).toUpperCase(),
+      color: "#7F77DD",
+      description: `${form.role.trim()} at ${form.company.trim()}.`,
+      slug,
+      plan: "free",
+      verified: false,
+      follower_count: 0,
+      following_count: 0,
+    });
+    if (error) {
+      setMsg(error.message || "Unable to create profile");
+      setBusy(false);
+      return;
+    }
+    onCreated?.();
+    onClose?.();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, padding: 20 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Create your MLM profile</div>
+        <div style={{ fontSize: 12, color: "#777", marginBottom: 14 }}>Required after login to access dashboard</div>
+        <input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Full Name *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
+        <input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} placeholder="City *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
+        <input value={form.company} onChange={(e)=>setForm({...form,company:e.target.value})} placeholder="Company *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
+        <input value={form.role} onChange={(e)=>setForm({...form,role:e.target.value})} placeholder="Role *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
+        <input value={form.wa} onChange={(e)=>setForm({...form,wa:e.target.value})} placeholder="WhatsApp Number" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
+        {msg && <div style={{fontSize:12,color:"#E24B4A",marginBottom:10}}>{msg}</div>}
+        <button type="button" disabled={busy} onClick={save} style={{width:"100%",background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,cursor:"pointer",opacity:busy?0.6:1}}>Save Profile</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [query,setQuery]=useState("");
   const [tab,setTab]=useState("directory");
@@ -841,7 +812,105 @@ export default function App(){
   const [showAuth,setShowAuth]=useState(false);
   const [showDashboard,setShowDashboard]=useState(false);
   const [showAdmin,setShowAdmin]=useState(false);
-  const [user,setUser]=useState(null);
+  const { user: authUser, loading: authLoading } = useAuth();
+  const [currentUser,setCurrentUser]=useState(null);
+  const [membersData,setMembersData]=useState(MEMBERS);
+  const [membersReloadKey,setMembersReloadKey]=useState(0);
+  const [showNotifications,setShowNotifications]=useState(false);
+  const [showOnboarding,setShowOnboarding]=useState(false);
+  const [myMemberProfile,setMyMemberProfile]=useState(null);
+
+  const { isFollowing, toggleFollow, followingCount, loading: followLoading } = useFollow(currentUser, membersData, setMembersData);
+  const { notifications, unreadCount: unreadNotifications, markAllRead } = useNotifications(currentUser);
+  const unreadMessages = notifications.filter((n)=>!n.read && n.type==="message").length;
+
+  useEffect(()=>{
+    let mounted=true;
+    const loadMembers=async()=>{
+      const { data, error } = await supabase
+        .from("members")
+        .select("*")
+        .order("follower_count", { ascending: false, nullsFirst: false });
+      if (error || !mounted || !Array.isArray(data) || data.length===0) return;
+      const mapped=data.map((m, idx)=>({
+        id:m.id||idx+1,
+        email:m.email||"",
+        name:m.name||"Unknown",
+        city:m.city||"",
+        area:m.area||"",
+        pin:m.pin||"",
+        country:m.country||"",
+        company:m.company||"",
+        role:m.role||"",
+        rating:Number(m.rating||0),
+        reviews:0,
+        phone:m.phone||"private",
+        wa:m.wa||"private",
+        photo:(m.photo_initials||"ML").slice(0,2).toUpperCase(),
+        color:m.color||"#7F77DD",
+        desc:m.description||"",
+        social:{fb:!!m.social_fb,ig:!!m.social_ig,yt:!!m.social_yt,li:!!m.social_li},
+        slug:m.slug||`member-${idx+1}`,
+        flags:0,
+        likes:m.likes||0,
+        bookmarks:0,
+        joined:m.joined_date||"",
+        team:m.team_size||"",
+        earnings:m.earnings||"",
+        verified:!!m.verified,
+        plan:m.plan||"free",
+        badges:Array.isArray(m.badges)?m.badges:[],
+        gallery:[],
+        events:[],
+        products:[],
+        teamMembers:[],
+        slots:[],
+        followerCount:m.follower_count||0,
+        followingCount:m.following_count||0,
+      }));
+      setMembersData(mapped);
+    };
+    loadMembers();
+    return ()=>{ mounted=false; };
+  },[membersReloadKey]);
+
+  useEffect(()=>{
+    if (authLoading) return;
+    if (!authUser) {
+      setCurrentUser(null);
+      return;
+    }
+
+    const hydrate = async () => {
+      const fallbackName = authUser.user_metadata?.name || authUser.email?.split("@")[0] || "User";
+      await supabase.from("users").upsert({
+        id: authUser.id,
+        name: fallbackName,
+        email: authUser.email || "",
+        plan: "free",
+      });
+      const { data } = await supabase.from("users").select("id,name,email,plan").eq("id", authUser.id).single();
+      setCurrentUser({
+        id: authUser.id,
+        name: data?.name || fallbackName,
+        email: data?.email || authUser.email || "",
+        plan: data?.plan || "free",
+      });
+    };
+
+    hydrate();
+  },[authUser, authLoading]);
+
+  useEffect(()=>{
+    if(!currentUser){
+      setMyMemberProfile(null);
+      setShowOnboarding(false);
+      return;
+    }
+    const mine = membersData.find((m)=>normalizeEmail(m.email)===normalizeEmail(currentUser.email));
+    setMyMemberProfile(mine||null);
+    if(!mine) setShowOnboarding(true);
+  },[currentUser, membersData]);
 
   const goHome=()=>{
     setProfileView(null);
@@ -858,6 +927,14 @@ export default function App(){
   };
 
   const openDashboard=()=>{
+    if(!currentUser){
+      setShowAuth(true);
+      return;
+    }
+    if(!myMemberProfile){
+      setShowOnboarding(true);
+      return;
+    }
     setShowDashboard(true);
     window.history.pushState({view:"dashboard"},"","/");
   };
@@ -865,6 +942,14 @@ export default function App(){
   const openAdmin=()=>{
     setShowAdmin(true);
     window.history.pushState({view:"admin"},"","/");
+  };
+
+  const openChatForMember=(member)=>{
+    if(!currentUser){
+      setShowAuth(true);
+      return;
+    }
+    setChat(member);
   };
 
   useEffect(()=>{
@@ -878,7 +963,7 @@ export default function App(){
         return;
       }
       if(st.view==="profile"&&st.memberId!=null){
-        const member=MEMBERS.find(x=>x.id===st.memberId);
+        const member=membersData.find(x=>x.id===st.memberId);
         setProfileView(member||null);
         setShowDashboard(false);
         setShowAdmin(false);
@@ -903,12 +988,11 @@ export default function App(){
     const onPopState=e=>applyHistoryState(e.state);
     window.addEventListener("popstate",onPopState);
 
-    ensureDefaultAdminAccount();
 
     const hash=window.location.hash;
     if(hash.startsWith("#/m/")){
       const slug=hash.slice(4);
-      const member=MEMBERS.find(x=>x.slug===slug);
+      const member=membersData.find(x=>x.slug===slug);
       if(member){
         window.history.replaceState(HISTORY_HOME,"","/");
         window.history.pushState({view:"profile",memberId:member.id},"",hash);
@@ -919,17 +1003,24 @@ export default function App(){
     }
 
     return()=>window.removeEventListener("popstate",onPopState);
-  },[]);
+  },[membersData]);
 
-  const filtered=MEMBERS.filter(m=>{
+  const filtered=membersData.filter(m=>{
     if(!query.trim())return true;
     const q=query.toLowerCase();
     return m.name.toLowerCase().includes(q)||m.city.toLowerCase().includes(q)||m.area.toLowerCase().includes(q)||m.pin.includes(q)||m.company.toLowerCase().includes(q)||m.role.toLowerCase().includes(q)||m.country.toLowerCase().includes(q);
   });
 
   if(profileView)return <>
-    <PersonalWebsite m={profileView} onHome={goHome} onChat={setChat}/>
-    {chat&&<ChatModal m={chat} onClose={()=>setChat(null)}/>}
+    <PersonalWebsite
+      m={profileView}
+      onHome={goHome}
+      onChat={openChatForMember}
+      onToggleFollow={toggleFollow}
+      isFollowing={isFollowing(profileView.id)}
+      followLoading={followLoading}
+    />
+    {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
   </>;
 
   const tabs=[{id:"directory",label:"Directory",icon:"🔍"},{id:"leaderboard",label:"Top",icon:"🏆"},{id:"board",label:"Board",icon:"📋"},{id:"plans",label:"Plans",icon:"💎"},{id:"me",label:"Me",icon:"👤"}];
@@ -943,9 +1034,10 @@ export default function App(){
             <div style={{fontSize:11,color:"#999"}}>Find · Connect · Grow Worldwide</div>
           </button>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {normalizeEmail(user?.email)==="admin@topmlmleaders.com"&&<button type="button" onClick={openAdmin} style={{fontSize:12,background:"#E24B4A18",color:"#E24B4A",border:"0.5px solid #E24B4A44",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>⚡ Admin</button>}
+            {currentUser&&<button type="button" onClick={()=>setShowNotifications(true)} style={{position:"relative",fontSize:12,background:"#f5f5ff",color:"#7F77DD",border:"0.5px solid #dcd8ff",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>🔔{unreadNotifications>0&&<span style={{position:"absolute",top:-6,right:-4,background:"#E24B4A",color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10}}>{unreadNotifications}</span>}</button>}
+            {normalizeEmail(currentUser?.email || authUser?.email)==="admin@topmlmleaders.com"&&<button type="button" onClick={openAdmin} style={{fontSize:12,background:"#E24B4A18",color:"#E24B4A",border:"0.5px solid #E24B4A44",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>⚡ Admin</button>}
             <button onClick={()=>setTab("plans")} style={{fontSize:12,background:"#EF9F2718",color:"#EF9F27",border:"0.5px solid #EF9F2744",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>💎 Plans</button>
-            {user?<button type="button" onClick={openDashboard} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700,maxWidth:220,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span>👤</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span></button>
+            {currentUser?<button type="button" onClick={openDashboard} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700,maxWidth:220,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span>👤</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name} · {followingCount}</span></button>
             :<button onClick={()=>setShowAuth(true)} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700}}>🔓 Login</button>}
           </div>
         </div>
@@ -962,16 +1054,16 @@ export default function App(){
       {tab==="directory"&&<>
         {query&&<div style={{fontSize:13,color:"#666",marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} found</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16}}>
-          {filtered.map(m=><MemberCard key={m.id} m={m} onView={openProfile} onChat={setChat} setShareOpen={setShareOpen}/>)}
+          {filtered.map(m=><MemberCard key={m.id} m={m} onView={openProfile} onChat={openChatForMember} setShareOpen={setShareOpen} onToggleFollow={toggleFollow} isFollowing={isFollowing(m.id)} followLoading={followLoading}/>)}
         </div>
       </>}
       {tab==="leaderboard"&&<div style={{maxWidth:600,margin:"0 auto"}}>
         <div style={{fontWeight:800,fontSize:18,marginBottom:16}}>🏆 Top Leaders This Week</div>
-        {[...MEMBERS].sort((a,b)=>b.likes-a.likes).map((m,idx)=><div key={m.id} style={{background:"#fff",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:10,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
+        {[...membersData].sort((a,b)=>(b.followerCount||0)-(a.followerCount||0)).map((m,idx)=><div key={m.id} style={{background:"#fff",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:10,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
           <div style={{fontSize:idx<3?26:16,minWidth:32,textAlign:"center",fontWeight:700}}>{["🥇","🥈","🥉"][idx]||`#${idx+1}`}</div>
           <Avatar initials={m.photo} color={m.color} size={44}/>
           <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{m.name} {m.verified&&"✓"}</div><div style={{fontSize:12,color:"#999"}}>{m.role} · {m.city}, {m.country}</div></div>
-          <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:20,color:m.color}}>{m.likes}</div><div style={{fontSize:11,color:"#999"}}>likes</div></div>
+          <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:20,color:m.color}}>{m.followerCount||0}</div><div style={{fontSize:11,color:"#999"}}>followers</div></div>
         </div>)}
       </div>}
       {tab==="board"&&<div style={{maxWidth:600,margin:"0 auto"}}>
@@ -1001,15 +1093,16 @@ export default function App(){
         <div style={{textAlign:"center",marginTop:16,fontSize:13,color:"#999"}}>💳 Secure payment via Razorpay · Cancel anytime</div>
       </div>}
       {tab==="me"&&<div style={{maxWidth:480,margin:"0 auto"}}>
-        {user?<div>
+        {currentUser?<div>
           <div style={{fontWeight:800,fontSize:20,marginBottom:16}}>My Account</div>
           <div style={{background:"#fff",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
             <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:16}}>
-              <Avatar initials={user.name.slice(0,2).toUpperCase()} color="#7F77DD" size={60}/>
-              <div><div style={{fontWeight:800,fontSize:18}}>{user.name}</div><div style={{fontSize:13,color:"#666"}}>{user.email}</div></div>
+              <Avatar initials={currentUser.name.slice(0,2).toUpperCase()} color="#7F77DD" size={60}/>
+              <div><div style={{fontWeight:800,fontSize:18}}>{currentUser.name}</div><div style={{fontSize:13,color:"#666"}}>{currentUser.email}</div></div>
             </div>
+            {!myMemberProfile&&<button type="button" onClick={()=>setShowOnboarding(true)} style={{width:"100%",background:"#EF9F2718",color:"#EF9F27",border:"1px solid #EF9F2744",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>⚡ Complete MLM Profile</button>}
             <button type="button" onClick={openDashboard} style={{width:"100%",background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📊 Open Dashboard</button>
-            <button onClick={()=>setUser(null)} style={{width:"100%",background:"none",border:"0.5px solid #ddd",borderRadius:10,padding:"11px",fontWeight:600,fontSize:14,cursor:"pointer",color:"#666"}}>Logout</button>
+            <button onClick={()=>supabase.auth.signOut()} style={{width:"100%",background:"none",border:"0.5px solid #ddd",borderRadius:10,padding:"11px",fontWeight:600,fontSize:14,cursor:"pointer",color:"#666"}}>Logout</button>
           </div>
         </div>:<div style={{textAlign:"center",padding:"40px 20px"}}>
           <div style={{fontSize:48,marginBottom:16}}>👤</div>
@@ -1019,14 +1112,33 @@ export default function App(){
       </div>}
     </div>
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"0.5px solid #eee",display:"flex",zIndex:100}}>
-      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 14px",background:"none",border:"none",cursor:"pointer",color:tab===t.id?"#7F77DD":"#999"}}>
-        <span style={{fontSize:18}}>{t.icon}</span><span style={{fontSize:10,fontWeight:tab===t.id?700:400}}>{t.label}</span>
+      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 14px",background:"none",border:"none",cursor:"pointer",color:tab===t.id?"#7F77DD":"#999",position:"relative"}}>
+        <span style={{fontSize:18}}>{t.icon}</span>
+        {t.id==="me"&&unreadMessages>0&&<span style={{position:"absolute",top:6,right:"28%",background:"#E24B4A",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9}}>{unreadMessages}</span>}
+        <span style={{fontSize:10,fontWeight:tab===t.id?700:400}}>{t.label}</span>
       </button>)}
     </div>
-    {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onLogin={u=>{setUser(u);setShowAuth(false);}}/>}
-    {showDashboard&&user&&<MemberDashboard user={user} onHome={goHome}/>}
-    {showAdmin&&<AdminPanel onHome={goHome}/>}
-    {chat&&<ChatModal m={chat} onClose={()=>setChat(null)}/>}
+    {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSuccess={()=>setShowAuth(false)}/>}
+    {showDashboard&&currentUser&&<MemberDashboard user={currentUser} membersData={membersData} onHome={goHome} onOpenChat={openChatForMember}/>}
+    {showAdmin&&<AdminPanel membersData={membersData} onHome={goHome}/>}
+    {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
     {shareOpen&&<ShareSheet m={shareOpen} onClose={()=>setShareOpen(null)}/>}
+    {showOnboarding&&currentUser&&<OnboardingModal user={currentUser} onClose={()=>setShowOnboarding(false)} onCreated={()=>setMembersReloadKey(x=>x+1)}/>}
+    {showNotifications&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1400,display:"flex",alignItems:"flex-start",justifyContent:"center"}} onClick={()=>setShowNotifications(false)}>
+      <div style={{background:"#fff",marginTop:70,width:"100%",maxWidth:460,borderRadius:14,padding:16,maxHeight:"72vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontWeight:800,fontSize:16}}>Notifications</div>
+          <button type="button" onClick={markAllRead} style={{background:"#f5f5f5",border:"1px solid #eee",borderRadius:10,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>Mark all read</button>
+        </div>
+        {notifications.length===0&&<div style={{fontSize:13,color:"#999",padding:"20px 0",textAlign:"center"}}>No notifications yet</div>}
+        {notifications.map((n)=><button type="button" key={n.id} onClick={()=>{setShowNotifications(false); if(n.link) window.location.hash=n.link;}} style={{width:"100%",textAlign:"left",border:"1px solid #eee",background:n.read?"#fff":"#f8f8ff",borderRadius:12,padding:12,marginBottom:8,cursor:"pointer"}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:10}}>
+            <div style={{fontWeight:n.read?600:800,fontSize:13}}>{n.text}</div>
+            {!n.read&&<span style={{fontSize:10,background:"#7F77DD",color:"#fff",borderRadius:10,padding:"2px 6px"}}>NEW</span>}
+          </div>
+          <div style={{fontSize:11,color:"#999",marginTop:4}}>{new Date(n.created_at).toLocaleString()}</div>
+        </button>)}
+      </div>
+    </div>}
   </div>;
 }
