@@ -55,4 +55,4 @@ if [[ -d "$ROOT/supabase/migrations" ]]; then
   shopt -u nullglob
 fi
 
-echo "Done. Storage: ensure bucket \"avatars\" policies applied (see supabase/migrations/*storage*)."
+echo "Done. Storage: create bucket \"avatars\" + policies in Dashboard or Storage API — see supabase/migrations/*storage*."
