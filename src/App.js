@@ -9,7 +9,7 @@ import { useNotifications } from "./hooks/useNotifications";
 import { useAuth } from "./hooks/useAuth";
 
 const HISTORY_HOME = { view: "home", tab: "directory" };
-const SITE_URL = process.env.REACT_APP_SITE_URL || window.location.origin;
+const SITE_URL = window.location.origin || process.env.REACT_APP_SITE_URL;
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
