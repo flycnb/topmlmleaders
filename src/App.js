@@ -115,27 +115,70 @@ function JoinForm({m,onClose}){
   </div>;
 }
 
-function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoading}){
+function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoading,onMemberUpdated}){
   const [tab,setTab]=useState("about");
   const [joinOpen,setJoinOpen]=useState(false);
   const [bookOpen,setBookOpen]=useState(false);
   const [userRating,setUserRating]=useState(0);
   const [rated,setRated]=useState(false);
   const [galleryIdx,setGalleryIdx]=useState(null);
+  const [youtubeUrl,setYoutubeUrl]=useState(m.youtubeUrl||"");
+  const [uploading,setUploading]=useState(false);
+  const [savingVideo,setSavingVideo]=useState(false);
   const gc=["#7F77DD","#D4537E","#1D9E75","#BA7517","#185FA5"];
   const avail=m.slots.reduce((a,d)=>a+d.slots.filter(s=>!s.booked).length,0);
-  const tabs=[{id:"about",label:"About"},{id:"gallery",label:"Gallery"},{id:"products",label:"Products"},{id:"events",label:"Events"},{id:"team",label:"Team"},{id:"book",label:"Book"}];
-  return <div style={{minHeight:"100vh",background:"#f8f8f8",fontFamily:"system-ui,sans-serif"}}>
+  const tabs=[{id:"about",label:"About"},{id:"posts",label:"Posts"},{id:"gallery",label:"Gallery"},{id:"products",label:"Products"},{id:"events",label:"Events"},{id:"team",label:"Team"},{id:"book",label:"Book"}];
+
+  const extractYouTubeId=(url)=>{
+    const u=(url||"").trim();
+    const m1=u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/i);
+    return m1?.[1] || "";
+  };
+  const youtubeId=extractYouTubeId(youtubeUrl);
+
+  const uploadAvatar=async(file)=>{
+    if(!file) return;
+    setUploading(true);
+    const ext = file.name.split(".").pop() || "jpg";
+    const fileName = `${m.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("avatars").upload(fileName, file, { upsert: true });
+    if(upErr){ setUploading(false); return; }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+    const avatarUrl = data?.publicUrl;
+    const { error } = await supabase.from("members").update({ avatar_url: avatarUrl }).eq("id", m.id);
+    if(!error && avatarUrl){
+      onMemberUpdated?.({ ...m, avatarUrl });
+    }
+    setUploading(false);
+  };
+
+  const saveYoutube=async()=>{
+    setSavingVideo(true);
+    const { error } = await supabase.from("members").update({ youtube_url: youtubeUrl.trim() || null }).eq("id", m.id);
+    if(!error){
+      onMemberUpdated?.({ ...m, youtubeUrl: youtubeUrl.trim() });
+    }
+    setSavingVideo(false);
+  };
+
+  return <div style={{minHeight:"100vh",background:"#fff",fontFamily:"system-ui,sans-serif"}}>
     <div style={{background:`linear-gradient(135deg,${m.color}ee,${m.color}77)`,padding:"28px 20px 24px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
         <button type="button" onClick={onHome} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:20,padding:"7px 16px",color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>← Home</button>
         <button onClick={()=>window.open(`https://wa.me/?text=${encodeURIComponent(`Check out ${m.name}'s MLM profile!\n${m.role} | ${m.company} | ${m.city}\n⭐${m.rating} | 👥${m.team} | 💰${m.earnings}\nhttps://topmlmleaders.com/${m.slug}`)}`)} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:20,padding:"7px 16px",color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>↗ Share</button>
       </div>
-      <div style={{textAlign:"center"}}>
-        <Avatar initials={m.photo} color="rgba(255,255,255,0.3)" size={88}/>
+      <div style={{textAlign:"center",position:"relative"}}>
+        <div style={{width:100,height:100,margin:"0 auto",marginTop:8,position:"relative"}}>
+          {m.avatarUrl?<img src={m.avatarUrl} alt={m.name} style={{width:100,height:100,borderRadius:"50%",objectFit:"cover",border:"4px solid #fff",boxShadow:"0 8px 20px rgba(0,0,0,0.2)"}}/>:<Avatar initials={m.photo} color="rgba(255,255,255,0.3)" size={100}/>}
+          <label style={{position:"absolute",right:0,bottom:0,width:30,height:30,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",cursor:"pointer",boxShadow:"0 3px 10px rgba(0,0,0,0.2)"}}>📷
+            <input type="file" accept="image/*" style={{display:"none"}} onChange={(e)=>uploadAvatar(e.target.files?.[0])}/>
+          </label>
+        </div>
+        {uploading&&<div style={{fontSize:11,color:"#fff",marginTop:6}}>Uploading photo...</div>}
         <div style={{color:"#fff",fontSize:22,fontWeight:800,marginTop:12}}>{m.name} {m.verified&&"✓"} {m.plan==="elite"&&"🌟"}</div>
         <div style={{color:"rgba(255,255,255,0.9)",fontSize:13,marginTop:3}}>{m.role} · {m.company}</div>
         <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,marginTop:3}}>📍 {m.city}, {m.area} · {m.country}</div>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:8,marginTop:8}}><span style={{color:"#fff",fontWeight:900,fontSize:26}}>{(m.followerCount||0).toLocaleString()}</span><span style={{color:"rgba(255,255,255,0.9)",fontSize:12,fontWeight:700}}>Followers</span></div>
         <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,marginTop:6}}><Stars rating={m.rating}/><span style={{color:"rgba(255,255,255,0.9)",fontSize:12}}>{m.rating} ({m.reviews})</span></div>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:10,flexWrap:"wrap"}}>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#fff",border:"1px solid rgba(255,255,255,0.4)"}}>💰 {m.earnings}</div>
@@ -148,7 +191,7 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
             type="button"
             onClick={()=>onToggleFollow?.(m)}
             disabled={followLoading}
-            style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #fff":"none",borderRadius:20,padding:"7px 18px",fontWeight:700,fontSize:13,cursor:"pointer"}}
+            style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #fff":"none",borderRadius:999,padding:"10px 24px",fontWeight:800,fontSize:14,cursor:"pointer"}}
           >
             {isFollowing?"Following":"Follow"}
           </button>
@@ -157,16 +200,16 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
         <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:8}}>🔗 topmlmleaders.com/{m.slug}</div>
       </div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"0 16px",marginTop:-20,marginBottom:14}}>
-      {[["Team",m.team],["Since",m.joined],["Earns",m.earnings]].map(([l,v])=><div key={l} style={{background:"#fff",borderRadius:12,padding:"10px 8px",textAlign:"center",boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}><div style={{fontWeight:800,fontSize:13,color:m.color}}>{v}</div><div style={{fontSize:11,color:"#999",marginTop:2}}>{l}</div></div>)}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,padding:"0 16px",marginTop:-16,marginBottom:14}}>
+      {[["👥","Team",m.team],["📅","Since",m.joined],["💰","Earns",m.earnings]].map(([ic,l,v])=><div key={l} style={{background:"#fff",borderRadius:14,padding:"12px 8px",textAlign:"center",boxShadow:"0 4px 16px rgba(22,26,29,0.08)"}}><div style={{fontSize:16}}>{ic}</div><div style={{fontWeight:800,fontSize:13,color:m.color,marginTop:2}}>{v}</div><div style={{fontSize:11,color:"#999",marginTop:2}}>{l}</div></div>)}
     </div>
     <div style={{padding:"0 16px",marginBottom:12}}>
       <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
         {m.badges.map(b=><div key={b} style={{flexShrink:0,background:m.color+"14",border:`1px solid ${m.color}33`,borderRadius:20,padding:"4px 12px",fontSize:11,color:m.color,fontWeight:600,whiteSpace:"nowrap"}}>{b}</div>)}
       </div>
     </div>
-    <div style={{display:"flex",padding:"0 16px",marginBottom:14,borderBottom:"0.5px solid #eee",overflowX:"auto"}}>
-      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flexShrink:0,background:"none",border:"none",borderBottom:tab===t.id?`2.5px solid ${m.color}`:"2.5px solid transparent",padding:"8px 10px",fontSize:12,fontWeight:tab===t.id?700:400,color:tab===t.id?m.color:"#999",cursor:"pointer"}}>{t.label}{t.id==="book"&&avail>0&&m.plan==="elite"&&<span style={{background:"#1D9E75",color:"#fff",borderRadius:10,fontSize:10,padding:"1px 5px",marginLeft:4}}>{avail}</span>}</button>)}
+    <div style={{display:"flex",padding:"0 16px",marginBottom:14,borderBottom:"0.5px solid #eee",overflowX:"auto",position:"sticky",top:0,background:"#fff",zIndex:30}}>
+      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flexShrink:0,background:"none",border:"none",borderBottom:tab===t.id?`2.5px solid ${m.color}`:"2.5px solid transparent",padding:"10px 10px",fontSize:12,fontWeight:tab===t.id?700:500,color:tab===t.id?m.color:"#999",cursor:"pointer"}}>{t.label}{t.id==="book"&&avail>0&&m.plan==="elite"&&<span style={{background:"#1D9E75",color:"#fff",borderRadius:10,fontSize:10,padding:"1px 5px",marginLeft:4}}>{avail}</span>}</button>)}
     </div>
     <div style={{padding:"0 16px 120px"}}>
       {tab==="about"&&<>
@@ -175,7 +218,16 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,color:"#666"}}>📞 Phone</span>{m.phone==="private"?<span style={{fontSize:13,color:"#999"}}>🔒 Private</span>:<a href={`tel:${m.phone}`} style={{fontSize:13,color:"#1D9E75",textDecoration:"none",fontWeight:600}}>{m.phone}</a>}</div>
           <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:"#666"}}>💬 WhatsApp</span>{m.wa==="private"?<span style={{fontSize:13,color:"#999"}}>🔒 Private</span>:<a href={`https://wa.me/${m.wa}`} style={{fontSize:13,color:"#25D366",textDecoration:"none",fontWeight:600}}>Chat Now</a>}</div>
         </div>
-        {m.social.yt&&<div style={{background:"#fff",borderRadius:14,overflow:"hidden",marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}><div style={{padding:"12px 16px 8px",fontWeight:700,fontSize:14,color:m.color}}>My Video</div><div style={{aspectRatio:"16/9",background:"#111",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:8}}><div style={{width:52,height:52,borderRadius:"50%",background:"#FF0000",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>▶</div><div style={{color:"#fff",fontSize:12,opacity:0.6}}>YouTube Video</div></div></div>}
+        <div style={{background:"#fff",borderRadius:14,overflow:"hidden",marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}>
+          <div style={{padding:"12px 16px 8px",fontWeight:700,fontSize:14,color:m.color}}>My Video</div>
+          <div style={{padding:"0 16px 14px"}}>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <input value={youtubeUrl} onChange={(e)=>setYoutubeUrl(e.target.value)} placeholder="Paste YouTube URL" style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1px solid #ddd",fontSize:13}}/>
+              <button type="button" onClick={saveYoutube} disabled={savingVideo} style={{background:m.color,color:"#fff",border:"none",borderRadius:10,padding:"0 12px",fontWeight:700,fontSize:12,cursor:"pointer"}}>{savingVideo?"Saving":"Save"}</button>
+            </div>
+            {youtubeId?<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #eee"}}><iframe title="youtube-video" src={`https://www.youtube.com/embed/${youtubeId}`} style={{width:"100%",aspectRatio:"16/9",border:0}} allowFullScreen/></div>:<div style={{border:"1px dashed #d8d8d8",borderRadius:12,padding:"18px 12px",textAlign:"center",fontSize:12,color:"#888"}}>No video added yet. Add YouTube URL above.</div>}
+          </div>
+        </div>
         <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}><div style={{fontWeight:700,fontSize:14,marginBottom:12,color:m.color}}>Social Media</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
             {m.social.fb&&<button style={{background:"#1877F218",color:"#1877F2",border:"0.5px solid #1877F244",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>📘 Facebook</button>}
@@ -189,6 +241,7 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
           {rated?<div style={{fontSize:13,color:"#1D9E75",fontWeight:600}}>✅ Thank you!</div>:<button onClick={()=>userRating>0&&setRated(true)} style={{background:m.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",opacity:userRating>0?1:0.4}}>Submit</button>}
         </div>
       </>}
+      {tab==="posts"&&<div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",fontSize:13,color:"#777"}}>Posts feed coming soon.</div>}
       {tab==="gallery"&&<>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
           {m.gallery.map((g,i)=><div key={i} onClick={()=>setGalleryIdx(i)} style={{aspectRatio:"1",borderRadius:12,background:`linear-gradient(135deg,${gc[i%5]}33,${gc[i%5]}66)`,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,cursor:"pointer",padding:12,border:"0.5px solid #eee"}}>
@@ -406,7 +459,7 @@ function AuthModal({ onClose, onSuccess }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 380, padding: 28 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 380, padding: 24, maxHeight: "88vh", overflowY: "auto", boxSizing:"border-box" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#7F77DD" }}>🌐 TopMLMLeaders</div>
           <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>Find · Connect · Grow Worldwide</div>
@@ -847,6 +900,8 @@ export default function App(){
         phone:m.phone||"private",
         wa:m.wa||"private",
         photo:(m.photo_initials||"ML").slice(0,2).toUpperCase(),
+        avatarUrl:m.avatar_url||"",
+        youtubeUrl:m.youtube_url||"",
         color:m.color||"#7F77DD",
         desc:m.description||"",
         social:{fb:!!m.social_fb,ig:!!m.social_ig,yt:!!m.social_yt,li:!!m.social_li},
@@ -924,6 +979,12 @@ export default function App(){
   const openProfile=m=>{
     setProfileView(m);
     window.history.pushState({view:"profile",memberId:m.id},"",`#/m/${m.slug}`);
+  };
+
+  const handleMemberUpdated = (updatedMember) => {
+    if (!updatedMember?.id) return;
+    setMembersData((prev) => prev.map((x) => (String(x.id) === String(updatedMember.id) ? { ...x, ...updatedMember } : x)));
+    setProfileView((prev) => (prev && String(prev.id) === String(updatedMember.id) ? { ...prev, ...updatedMember } : prev));
   };
 
   const openDashboard=()=>{
@@ -1019,6 +1080,7 @@ export default function App(){
       onToggleFollow={toggleFollow}
       isFollowing={isFollowing(profileView.id)}
       followLoading={followLoading}
+      onMemberUpdated={handleMemberUpdated}
     />
     {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
   </>;

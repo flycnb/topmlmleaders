@@ -60,12 +60,14 @@ export function useFollow(user, membersData, setMembersData) {
     const memberId = member.id;
     const already = followingIds.has(String(memberId));
     try {
+      let opError = null;
       if (already) {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", userId)
           .eq("following_id", memberId);
+        opError = error;
         const { data: m } = await supabase.from("members").select("follower_count").eq("id", memberId).single();
         await supabase
           .from("members")
@@ -85,7 +87,8 @@ export function useFollow(user, membersData, setMembersData) {
           )
         );
       } else {
-        await supabase.from("follows").insert({ follower_id: userId, following_id: memberId });
+        const { error } = await supabase.from("follows").insert({ follower_id: userId, following_id: memberId });
+        opError = error;
         const { data: m } = await supabase.from("members").select("follower_count").eq("id", memberId).single();
         await supabase
           .from("members")
@@ -117,6 +120,9 @@ export function useFollow(user, membersData, setMembersData) {
           )
         );
       }
+      if (opError) return { ok: false, error: opError };
+      const { data: latest } = await supabase.from("follows").select("following_id").eq("follower_id", userId);
+      setFollowingIds(new Set((latest || []).map((x) => String(x.following_id))));
       return { ok: true };
     } finally {
       setLoading(false);

@@ -32,6 +32,8 @@ create table if not exists public.members (
   phone text,
   wa text,
   photo_initials text,
+  avatar_url text,
+  youtube_url text,
   color text default '#7F77DD',
   description text,
   social_fb text,
@@ -64,6 +66,8 @@ alter table public.members add column if not exists rating numeric(3,2) default 
 alter table public.members add column if not exists phone text;
 alter table public.members add column if not exists wa text;
 alter table public.members add column if not exists photo_initials text;
+alter table public.members add column if not exists avatar_url text;
+alter table public.members add column if not exists youtube_url text;
 alter table public.members add column if not exists color text default '#7F77DD';
 alter table public.members add column if not exists description text;
 alter table public.members add column if not exists social_fb text;
