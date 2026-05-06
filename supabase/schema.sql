@@ -50,6 +50,7 @@ create table if not exists public.members (
   earnings text,
   follower_count integer default 0,
   following_count integer default 0,
+  owner_id uuid references auth.users(id) on delete set null,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -84,8 +85,19 @@ alter table public.members add column if not exists team_size text;
 alter table public.members add column if not exists earnings text;
 alter table public.members add column if not exists follower_count integer default 0;
 alter table public.members add column if not exists following_count integer default 0;
+alter table public.members add column if not exists owner_id uuid references auth.users(id) on delete set null;
 alter table public.members add column if not exists created_at timestamptz default now();
 alter table public.members add column if not exists updated_at timestamptz default now();
+
+create index if not exists idx_members_owner on public.members(owner_id);
+
+-- Link existing rows to signup users where emails match (idempotent).
+update public.members m
+set owner_id = u.id
+from auth.users u
+where m.owner_id is null
+  and m.email is not null
+  and lower(trim(m.email)) = lower(trim(u.email));
 
 update public.members set
   rating = coalesce(rating, 0),

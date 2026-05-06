@@ -815,6 +815,7 @@ function OnboardingModal({ user, onClose, onCreated }) {
     const { error } = await supabase.from("members").insert({
       name: form.name.trim(),
       email: user?.email || "",
+      owner_id: user?.id || null,
       city: form.city.trim(),
       country: "India",
       company: form.company.trim(),
