@@ -7,13 +7,25 @@ export function useAuth() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session ?? null);
-      setLoading(false);
-    });
+    const bootstrap = async () => {
+      try {
+        // Chrome can occasionally miss automatic URL exchange on OAuth return.
+        if (window.location.search.includes("code=")) {
+          await supabase.auth.exchangeCodeForSession(window.location.href).catch(() => {});
+          const cleaned = `${window.location.origin}${window.location.pathname}${window.location.hash || ""}`;
+          window.history.replaceState(window.history.state, "", cleaned);
+        }
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(data.session ?? null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    bootstrap();
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
       setSession(nextSession ?? null);
       setLoading(false);
     });

@@ -914,8 +914,8 @@ function MemberCard({m,onView,onChat,setShareOpen,onToggleFollow,isFollowing,fol
   const [liked,setLiked]=useState(false);
   const [flagged,setFlagged]=useState(false);
   const avail=m.slots.reduce((a,d)=>a+d.slots.filter(s=>!s.booked).length,0);
-  return <div style={{background:"#fff",border:`0.5px solid ${m.color}33`,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:`0 2px 16px ${m.color}18`}}>
-    <div style={{height:56,background:`linear-gradient(135deg,${m.color}33,${m.color}11)`,position:"relative"}}>
+  return <div style={{background:"#fff",border:`1px solid ${m.color}22`,borderRadius:18,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:`0 8px 22px ${m.color}1f`}}>
+    <div style={{height:64,background:`linear-gradient(135deg,${m.color}44,${m.color}14)`,position:"relative"}}>
       <div style={{position:"absolute",top:8,right:8,display:"flex",gap:4}}>
         {m.plan==="elite"&&<span style={{fontSize:10,background:m.color,color:"#fff",borderRadius:20,padding:"2px 7px",fontWeight:700}}>🌟 Elite</span>}
         {m.plan==="pro"&&<span style={{fontSize:10,background:"#7F77DD",color:"#fff",borderRadius:20,padding:"2px 7px",fontWeight:700}}>💎 Pro</span>}
@@ -923,31 +923,31 @@ function MemberCard({m,onView,onChat,setShareOpen,onToggleFollow,isFollowing,fol
       </div>
       {m.plan==="elite"&&avail>0&&<div style={{position:"absolute",top:8,left:8,fontSize:10,background:"#1D9E75",color:"#fff",borderRadius:20,padding:"2px 7px",fontWeight:700}}>📅 {avail} slots</div>}
     </div>
-    <div style={{padding:"0 12px",marginTop:-26,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-      <Avatar initials={m.photo} color={m.color} size={52}/>
+    <div style={{padding:"0 14px",marginTop:-28,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+      <Avatar initials={m.photo} color={m.color} size={56}/>
       <div style={{display:"flex",gap:4,paddingBottom:2}}>
         <div style={{fontSize:10,background:"#eef2ff",border:`0.5px solid ${m.color}44`,borderRadius:20,padding:"2px 7px",color:m.color,fontWeight:700}}>👤 {m.followerCount||0}</div>
         <div style={{fontSize:10,background:"#f5f5f5",border:`0.5px solid ${m.color}33`,borderRadius:20,padding:"2px 7px",color:m.color,fontWeight:600}}>👥 {m.team}</div>
         <div style={{fontSize:10,background:"#f0fdf4",border:"0.5px solid #1D9E7533",borderRadius:20,padding:"2px 7px",color:"#1D9E75",fontWeight:600}}>💰 {m.earnings}</div>
       </div>
     </div>
-    <div style={{padding:"0 12px 12px"}}>
+    <div style={{padding:"0 14px 14px"}}>
       <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",marginBottom:2}}>
-        <span style={{fontWeight:800,fontSize:14}}>{m.name}</span>
-        <span style={{fontSize:10,background:m.color+"18",color:m.color,borderRadius:20,padding:"1px 7px",fontWeight:700}}>{m.role}</span>
+        <span style={{fontWeight:800,fontSize:17,lineHeight:1.15}}>{m.name}</span>
+        <span style={{fontSize:11,background:m.color+"18",color:m.color,borderRadius:20,padding:"2px 8px",fontWeight:700}}>{m.role}</span>
       </div>
-      <div style={{fontSize:11,color:"#666",marginBottom:1}}>📍 {m.city} · {m.country} · {m.pin}</div>
-      <div style={{fontSize:11,color:"#999",marginBottom:4}}>🏢 {m.company}</div>
-      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}><Stars rating={m.rating}/><span style={{fontSize:10,color:"#666"}}>{m.rating} ({m.reviews})</span></div>
-      <p style={{fontSize:11,color:"#666",margin:"0 0 6px",lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{m.desc}</p>
-      <div style={{fontSize:10,color:m.color,fontWeight:600,background:m.color+"10",borderRadius:20,padding:"2px 8px",display:"inline-block",marginBottom:8,border:`0.5px solid ${m.color}33`}}>🔗 topmlmleaders.com/{m.slug}</div>
+      <div style={{fontSize:12,color:"#596273",marginBottom:2}}>📍 {m.city} · {m.country} · {m.pin}</div>
+      <div style={{fontSize:12,color:"#8891A1",marginBottom:6}}>🏢 {m.company}</div>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><Stars rating={m.rating}/><span style={{fontSize:11,color:"#596273",fontWeight:600}}>{m.rating} ({m.reviews})</span></div>
+      <p style={{fontSize:13,color:"#5C6678",margin:"0 0 8px",lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{m.desc}</p>
+      <div style={{fontSize:11,color:m.color,fontWeight:700,background:m.color+"10",borderRadius:20,padding:"3px 9px",display:"inline-block",marginBottom:10,border:`1px solid ${m.color}33`}}>🔗 topmlmleaders.com/{m.slug}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{fontSize:11,color:"#666"}}>{m.followerCount||0} people follow this leader</div>
+        <div style={{fontSize:12,color:"#5C6678"}}>{m.followerCount||0} people follow this leader</div>
         <button
           type="button"
           onClick={()=>onToggleFollow?.(m)}
           disabled={followLoading}
-          style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #7F77DD":"none",borderRadius:20,padding:"4px 10px",fontWeight:700,fontSize:11,cursor:"pointer"}}
+          style={{background:isFollowing?"#fff":"#7F77DD",color:isFollowing?"#7F77DD":"#fff",border:isFollowing?"1px solid #7F77DD":"none",borderRadius:999,padding:"6px 12px",fontWeight:800,fontSize:12,cursor:"pointer"}}
         >
           {isFollowing?"Following":"Follow"}
         </button>
@@ -961,7 +961,7 @@ function MemberCard({m,onView,onChat,setShareOpen,onToggleFollow,isFollowing,fol
         <Btn icon="✉️" label="Chat" color="#185FA5" onClick={()=>onChat(m)}/>
         <Btn icon="↗" label="Share" color="#1D9E75" onClick={()=>setShareOpen(m)}/>
       </div>
-      <button onClick={()=>onView(m)} style={{width:"100%",background:`linear-gradient(135deg,${m.color},${m.color}bb)`,border:"none",borderRadius:10,padding:"9px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",boxShadow:`0 3px 10px ${m.color}44`}}>
+      <button onClick={()=>onView(m)} style={{width:"100%",background:`linear-gradient(135deg,${m.color},${m.color}bb)`,border:"none",borderRadius:11,padding:"11px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:`0 6px 14px ${m.color}44`}}>
         {m.plan==="elite"&&avail>0?"📅 Book · View Website →":"View Personal Website →"}
       </button>
     </div>
