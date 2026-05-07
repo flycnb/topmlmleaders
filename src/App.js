@@ -1,7 +1,7 @@
 // COPY ALL THIS CODE AND PASTE INTO src/App.js IN CODESPACES
 // TopMLMLeaders.com — Final Complete Version
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "./lib/supabaseClient";
 import { useFollow } from "./hooks/useFollow";
 import { useChat } from "./hooks/useChat";
@@ -1050,7 +1050,7 @@ function OnboardingModal({ user, onClose, onCreated }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
       <div style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, padding: 20 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Create your MLM profile</div>
-        <div style={{ fontSize: 12, color: "#777", marginBottom: 14 }}>Required after login to access dashboard</div>
+        <div style={{ fontSize: 12, color: "#777", marginBottom: 14 }}>Optional. You can complete this anytime.</div>
         <input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Full Name *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
         <input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} placeholder="City *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
         <input value={form.company} onChange={(e)=>setForm({...form,company:e.target.value})} placeholder="Company *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
@@ -1081,8 +1081,18 @@ export default function App(){
   const [myMemberProfile,setMyMemberProfile]=useState(null);
   const [bookingsVersion,setBookingsVersion]=useState(0);
 
-  const { isFollowing, toggleFollow, followingCount, loading: followLoading } = useFollow(currentUser, membersData, setMembersData);
-  const { notifications, unreadCount: unreadNotifications, markAllRead } = useNotifications(currentUser);
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    if (!authUser) return null;
+    return {
+      id: authUser.id,
+      name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "User",
+      email: authUser.email || "",
+      plan: "free",
+    };
+  }, [currentUser, authUser]);
+  const { isFollowing, toggleFollow, followingCount, loading: followLoading } = useFollow(activeUser, membersData, setMembersData);
+  const { notifications, unreadCount: unreadNotifications, markAllRead } = useNotifications(activeUser);
   const unreadMessages = notifications.filter((n)=>!n.read && n.type==="message").length;
 
   useEffect(()=>{
@@ -1166,15 +1176,14 @@ export default function App(){
   },[authUser, authLoading]);
 
   useEffect(()=>{
-    if(!currentUser){
+    if(!activeUser){
       setMyMemberProfile(null);
       setShowOnboarding(false);
       return;
     }
-    const mine = membersData.find((m)=>normalizeEmail(m.email)===normalizeEmail(currentUser.email));
+    const mine = membersData.find((m)=>normalizeEmail(m.email)===normalizeEmail(activeUser.email));
     setMyMemberProfile(mine||null);
-    if(!mine) setShowOnboarding(true);
-  },[currentUser, membersData]);
+  },[activeUser, membersData]);
 
   const goHome=()=>{
     setProfileView(null);
@@ -1197,12 +1206,8 @@ export default function App(){
   };
 
   const openDashboard=()=>{
-    if(!currentUser){
+    if(!activeUser){
       setShowAuth(true);
-      return;
-    }
-    if(!myMemberProfile){
-      setShowOnboarding(true);
       return;
     }
     setShowDashboard(true);
@@ -1215,7 +1220,7 @@ export default function App(){
   };
 
   const openChatForMember=(member)=>{
-    if(!currentUser){
+    if(!activeUser){
       setShowAuth(true);
       return;
     }
@@ -1290,10 +1295,10 @@ export default function App(){
       isFollowing={isFollowing(profileView.id)}
       followLoading={followLoading}
       onMemberUpdated={handleMemberUpdated}
-      currentUser={currentUser}
+      currentUser={activeUser}
       onBooked={() => setBookingsVersion((v) => v + 1)}
     />
-    {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
+    {chat&&<ChatModal m={chat} user={activeUser} onClose={()=>setChat(null)}/>}
   </>;
 
   const tabs=[{id:"directory",label:"Directory",icon:"🔍"},{id:"leaderboard",label:"Top",icon:"🏆"},{id:"board",label:"Board",icon:"📋"},{id:"plans",label:"Plans",icon:"💎"},{id:"me",label:"Me",icon:"👤"}];
@@ -1307,10 +1312,10 @@ export default function App(){
             <div style={{fontSize:11,color:"#999"}}>Find · Connect · Grow Worldwide</div>
           </button>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {currentUser&&<button type="button" onClick={()=>setShowNotifications(true)} style={{position:"relative",fontSize:12,background:"#f5f5ff",color:"#7F77DD",border:"0.5px solid #dcd8ff",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>🔔{unreadNotifications>0&&<span style={{position:"absolute",top:-6,right:-4,background:"#E24B4A",color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10}}>{unreadNotifications}</span>}</button>}
-            {normalizeEmail(currentUser?.email || authUser?.email)==="admin@topmlmleaders.com"&&<button type="button" onClick={openAdmin} style={{fontSize:12,background:"#E24B4A18",color:"#E24B4A",border:"0.5px solid #E24B4A44",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>⚡ Admin</button>}
+            {activeUser&&<button type="button" onClick={()=>setShowNotifications(true)} style={{position:"relative",fontSize:12,background:"#f5f5ff",color:"#7F77DD",border:"0.5px solid #dcd8ff",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>🔔{unreadNotifications>0&&<span style={{position:"absolute",top:-6,right:-4,background:"#E24B4A",color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10}}>{unreadNotifications}</span>}</button>}
+            {normalizeEmail(activeUser?.email || authUser?.email)==="admin@topmlmleaders.com"&&<button type="button" onClick={openAdmin} style={{fontSize:12,background:"#E24B4A18",color:"#E24B4A",border:"0.5px solid #E24B4A44",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>⚡ Admin</button>}
             <button onClick={()=>setTab("plans")} style={{fontSize:12,background:"#EF9F2718",color:"#EF9F27",border:"0.5px solid #EF9F2744",borderRadius:20,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>💎 Plans</button>
-            {currentUser?<button type="button" onClick={openDashboard} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700,maxWidth:220,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span>👤</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser.name} · {followingCount}</span></button>
+            {activeUser?<button type="button" onClick={openDashboard} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700,maxWidth:220,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span>👤</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{activeUser.name} · {followingCount}</span></button>
             :<button onClick={()=>setShowAuth(true)} style={{fontSize:12,background:"#7F77DD",color:"#fff",border:"none",borderRadius:20,padding:"7px 14px",cursor:"pointer",fontWeight:700}}>🔓 Login</button>}
           </div>
         </div>
@@ -1326,7 +1331,7 @@ export default function App(){
     <div style={{maxWidth:1400,margin:"0 auto",padding:"16px 20px calc(90px + env(safe-area-inset-bottom, 0px))"}}>
       {tab==="directory"&&<>
         {query&&<div style={{fontSize:13,color:"#666",marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} found</div>}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:18}}>
           {filtered.map(m=><MemberCard key={m.id} m={m} onView={openProfile} onChat={openChatForMember} setShareOpen={setShareOpen} onToggleFollow={toggleFollow} isFollowing={isFollowing(m.id)} followLoading={followLoading}/>)}
         </div>
       </>}
@@ -1366,12 +1371,12 @@ export default function App(){
         <div style={{textAlign:"center",marginTop:16,fontSize:13,color:"#999"}}>💳 Secure payment via Razorpay · Cancel anytime</div>
       </div>}
       {tab==="me"&&<div style={{maxWidth:480,margin:"0 auto"}}>
-        {currentUser?<div>
+        {activeUser?<div>
           <div style={{fontWeight:800,fontSize:20,marginBottom:16}}>My Account</div>
           <div style={{background:"#fff",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
             <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:16}}>
-              <Avatar initials={currentUser.name.slice(0,2).toUpperCase()} color="#7F77DD" size={60}/>
-              <div><div style={{fontWeight:800,fontSize:18}}>{currentUser.name}</div><div style={{fontSize:13,color:"#666"}}>{currentUser.email}</div></div>
+              <Avatar initials={activeUser.name.slice(0,2).toUpperCase()} color="#7F77DD" size={60}/>
+              <div><div style={{fontWeight:800,fontSize:18}}>{activeUser.name}</div><div style={{fontSize:13,color:"#666"}}>{activeUser.email}</div></div>
             </div>
             {!myMemberProfile&&<button type="button" onClick={()=>setShowOnboarding(true)} style={{width:"100%",background:"#EF9F2718",color:"#EF9F27",border:"1px solid #EF9F2744",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>⚡ Complete MLM Profile</button>}
             <button type="button" onClick={openDashboard} style={{width:"100%",background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📊 Open Dashboard</button>
@@ -1392,11 +1397,11 @@ export default function App(){
       </button>)}
     </div>
     {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSuccess={()=>setShowAuth(false)}/>}
-    {showDashboard&&currentUser&&<MemberDashboard user={currentUser} myMemberProfile={myMemberProfile} membersData={membersData} notifications={notifications} onHome={goHome} onOpenChat={openChatForMember} onBookingsChanged={bookingsVersion}/>}
+    {showDashboard&&activeUser&&<MemberDashboard user={activeUser} myMemberProfile={myMemberProfile} membersData={membersData} notifications={notifications} onHome={goHome} onOpenChat={openChatForMember} onBookingsChanged={bookingsVersion}/>}
     {showAdmin&&<AdminPanel membersData={membersData} onHome={goHome}/>}
-    {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
+    {chat&&<ChatModal m={chat} user={activeUser} onClose={()=>setChat(null)}/>}
     {shareOpen&&<ShareSheet m={shareOpen} onClose={()=>setShareOpen(null)}/>}
-    {showOnboarding&&currentUser&&<OnboardingModal user={currentUser} onClose={()=>setShowOnboarding(false)} onCreated={()=>setMembersReloadKey(x=>x+1)}/>}
+    {showOnboarding&&activeUser&&<OnboardingModal user={activeUser} onClose={()=>setShowOnboarding(false)} onCreated={()=>setMembersReloadKey(x=>x+1)}/>}
     {showNotifications&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1400,display:"flex",alignItems:"flex-start",justifyContent:"center"}} onClick={()=>setShowNotifications(false)}>
       <div style={{background:"#fff",marginTop:70,width:"100%",maxWidth:460,borderRadius:14,padding:16,maxHeight:"72vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
