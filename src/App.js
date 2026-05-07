@@ -695,12 +695,12 @@ function MemberDashboard({ user, myMemberProfile, membersData, notifications, on
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 12, marginBottom: 20 }}>
           {[
-            ["👥", "Followers", stats.followers],
-            ["💬", "Chats", stats.chats],
-            ["📅", "Bookings", stats.bookings],
-            ["🔔", "Alerts", (notifications || []).filter((n) => !n.read).length],
-          ].map(([icon, label, val]) => (
-            <div key={label} style={{ background: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", boxShadow: "0 1px 8px rgba(0,0,0,0.06)", position: "relative" }}>
+            ["👥", "Followers", stats.followers, "overview"],
+            ["💬", "Chats", stats.chats, "messages"],
+            ["📅", "Bookings", stats.bookings, "bookings"],
+            ["🔔", "Alerts", (notifications || []).filter((n) => !n.read).length, "overview"],
+          ].map(([icon, label, val, targetTab]) => (
+            <button type="button" key={label} onClick={() => setTab(targetTab)} style={{ background: "#fff", border: "none", borderRadius: 12, padding: "14px", textAlign: "center", boxShadow: "0 1px 8px rgba(0,0,0,0.06)", position: "relative", cursor: "pointer" }}>
               {label === "Alerts" && (notifications || []).filter((n) => !n.read).length > 0 && (
                 <div style={{ position: "absolute", top: 8, right: 8, background: "#E24B4A", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>
                   {(notifications || []).filter((n) => !n.read).length}
@@ -709,7 +709,7 @@ function MemberDashboard({ user, myMemberProfile, membersData, notifications, on
               <div style={{ fontSize: 22 }}>{icon}</div>
               <div style={{ fontWeight: 800, fontSize: 20, marginTop: 4 }}>{val}</div>
               <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{label}</div>
-            </div>
+            </button>
           ))}
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
