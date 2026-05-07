@@ -24,10 +24,17 @@ export function useAuth() {
     };
     bootstrap();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
-      setSession(nextSession ?? null);
-      setLoading(false);
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+        setSession(nextSession ?? null);
+        setLoading(false);
+        return;
+      }
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setLoading(false);
+      }
     });
 
     return () => {
