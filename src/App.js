@@ -41,49 +41,102 @@ const Stars=({rating})=><span style={{display:"flex",gap:2,alignItems:"center"}}
 const Avatar=({initials,color,size=52})=><div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color}cc,${color}88)`,border:`2.5px solid ${color}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:size*0.32,color:"#fff",flexShrink:0,boxShadow:`0 4px 14px ${color}44`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 30% 30%,rgba(255,255,255,0.25),transparent 60%)"}}/>  <span style={{position:"relative",zIndex:1}}>{initials}</span></div>;
 const Btn=({label,icon,count,color="var(--color-text-secondary)",onClick})=><button onClick={onClick} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",color,padding:"4px 5px",borderRadius:6}}><span style={{fontSize:15}}>{icon}</span>{count!==undefined&&<span style={{fontSize:10}}>{count}</span>}{label&&<span style={{fontSize:10,color:"#888"}}>{label}</span>}</button>;
 
-function BookingModal({m,onClose}){
-  const [selDay,setSelDay]=useState(0);
-  const [selSlot,setSelSlot]=useState(null);
-  const [name,setName]=useState("");
-  const [step,setStep]=useState(1);
-  const day=m.slots[selDay];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-    <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,padding:"20px 20px 36px",maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-      <div style={{width:36,height:4,background:"#ddd",borderRadius:2,margin:"0 auto 16px"}}/>
-      {step===1&&<>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Book with {m.name}</div>
-        <div style={{fontSize:12,color:"#999",marginBottom:16}}>{m.role} · {m.company}</div>
-        <div style={{display:"flex",gap:8,marginBottom:16}}>
-          {m.slots.map((d,i)=><button key={i} onClick={()=>{setSelDay(i);setSelSlot(null);}} style={{flex:1,background:selDay===i?m.color:"#f5f5f5",color:selDay===i?"#fff":"#666",border:"none",borderRadius:10,padding:"8px 4px",cursor:"pointer",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:700}}>{d.day}</div>
-            <div style={{fontSize:11,opacity:0.8}}>{d.date}</div>
-          </button>)}
+function BookingModal({ m, currentUser, onClose, onBooked }) {
+  const [selDay, setSelDay] = useState(0);
+  const [selSlot, setSelSlot] = useState(null);
+  const [name, setName] = useState("");
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [bookErr, setBookErr] = useState("");
+  const day = m.slots?.[selDay];
+  const goConfirm = async () => {
+    setBookErr("");
+    if (!name.trim() || !currentUser?.id || selSlot === null || !day?.slots?.[selSlot]) return;
+    setSaving(true);
+    const slot = day.slots[selSlot];
+    const { error } = await supabase.from("bookings").insert({
+      member_id: m.id,
+      booker_id: currentUser.id,
+      booker_name: name.trim(),
+      slot_day: `${day.day} ${day.date}`,
+      slot_time: slot.time,
+      slot_type: slot.type || "",
+      status: "pending",
+    });
+    setSaving(false);
+    if (error) {
+      setBookErr(error.message || "Could not save booking");
+      return;
+    }
+    onBooked?.();
+    setStep(3);
+  };
+  if (!m.slots?.length) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+        <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: 24 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>No slots available</div>
+          <button type="button" onClick={onClose} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Close</button>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-          {day.slots.map((s,i)=><button key={i} onClick={()=>!s.booked&&setSelSlot(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:s.booked?"#f5f5f5":selSlot===i?m.color+"18":"#f9f9f9",border:`1.5px solid ${s.booked?"#eee":selSlot===i?m.color:"#eee"}`,borderRadius:12,padding:"12px 16px",cursor:s.booked?"not-allowed":"pointer",opacity:s.booked?0.5:1}}>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <span style={{fontSize:18}}>{s.booked?"🔒":selSlot===i?"✅":"🕐"}</span>
-              <div><div style={{fontWeight:700,fontSize:14,color:selSlot===i?m.color:"#333"}}>{s.time}</div><div style={{fontSize:12,color:"#666"}}>{s.type}</div></div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 20px max(36px, env(safe-area-inset-bottom))", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, background: "#ddd", borderRadius: 2, margin: "0 auto 16px" }} />
+        {!currentUser?.id && (
+          <div style={{ fontSize: 13, color: "#E24B4A", marginBottom: 12, textAlign: "center" }}>Please log in to book a slot.</div>
+        )}
+        {step === 1 && (
+          <>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Book with {m.name}</div>
+            <div style={{ fontSize: 12, color: "#999", marginBottom: 16 }}>{m.role} · {m.company}</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {m.slots.map((d, i) => (
+                <button key={i} type="button" onClick={() => { setSelDay(i); setSelSlot(null); }} style={{ flex: 1, background: selDay === i ? m.color : "#f5f5f5", color: selDay === i ? "#fff" : "#666", border: "none", borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{d.day}</div>
+                  <div style={{ fontSize: 11, opacity: 0.8 }}>{d.date}</div>
+                </button>
+              ))}
             </div>
-            <span style={{fontSize:12,fontWeight:600,color:s.booked?"#E24B4A":selSlot===i?m.color:"#1D9E75"}}>{s.booked?"Booked":selSlot===i?"Selected":"Available"}</span>
-          </button>)}
-        </div>
-        <button onClick={()=>selSlot!==null&&setStep(2)} style={{width:"100%",background:selSlot!==null?m.color:"#ddd",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:700,fontSize:15,cursor:selSlot!==null?"pointer":"not-allowed"}}>{selSlot!==null?`Book ${day.slots[selSlot].time} →`:"Select a slot first"}</button>
-      </>}
-      {step===2&&<>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:16}}>Almost done! 🎉</div>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your Name" style={{width:"100%",fontSize:14,padding:"12px 14px",borderRadius:10,border:`1.5px solid ${m.color}`,outline:"none",boxSizing:"border-box",marginBottom:16}}/>
-        <button onClick={()=>name.trim()&&setStep(3)} style={{width:"100%",background:name.trim()?m.color:"#ddd",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:700,fontSize:15,cursor:name.trim()?"pointer":"not-allowed"}}>Confirm Booking</button>
-      </>}
-      {step===3&&<div style={{textAlign:"center",padding:"20px 0"}}>
-        <div style={{fontSize:48,marginBottom:12}}>🎉</div>
-        <div style={{fontWeight:800,fontSize:20,marginBottom:6}}>Slot Confirmed!</div>
-        <div style={{fontSize:14,color:"#666",marginBottom:20}}>{day.day} {day.slots[selSlot]?.time}</div>
-        <button onClick={()=>window.open(`https://wa.me/${m.wa}?text=${encodeURIComponent(`Hi ${m.name}! I booked your ${day.slots[selSlot]?.time} slot. My name is ${name}.`)}`)} style={{width:"100%",background:"#25D366",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>💬 Message on WhatsApp</button>
-        <button onClick={onClose} style={{width:"100%",background:"none",border:"1px solid #ddd",borderRadius:12,padding:"12px",fontWeight:600,fontSize:14,cursor:"pointer",color:"#666"}}>Done ✓</button>
-      </div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {(day?.slots || []).map((s, i) => (
+                <button key={i} type="button" onClick={() => !s.booked && setSelSlot(i)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: s.booked ? "#f5f5f5" : selSlot === i ? m.color + "18" : "#f9f9f9", border: `1.5px solid ${s.booked ? "#eee" : selSlot === i ? m.color : "#eee"}`, borderRadius: 12, padding: "12px 16px", cursor: s.booked ? "not-allowed" : "pointer", opacity: s.booked ? 0.5 : 1 }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 18 }}>{s.booked ? "🔒" : selSlot === i ? "✅" : "🕐"}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: selSlot === i ? m.color : "#333" }}>{s.time}</div>
+                      <div style={{ fontSize: 12, color: "#666" }}>{s.type}</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: s.booked ? "#E24B4A" : selSlot === i ? m.color : "#1D9E75" }}>{s.booked ? "Booked" : selSlot === i ? "Selected" : "Available"}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => selSlot !== null && currentUser?.id && setStep(2)} style={{ width: "100%", background: selSlot !== null && currentUser?.id ? m.color : "#ddd", color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 15, cursor: selSlot !== null && currentUser?.id ? "pointer" : "not-allowed" }}>{selSlot !== null ? `Book ${day.slots[selSlot].time} →` : "Select a slot first"}</button>
+          </>
+        )}
+        {step === 2 && (
+          <>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Almost done! 🎉</div>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" style={{ width: "100%", fontSize: 14, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${m.color}`, outline: "none", boxSizing: "border-box", marginBottom: 16 }} />
+            {bookErr && <div style={{ fontSize: 12, color: "#E24B4A", marginBottom: 10, textAlign: "center" }}>{bookErr}</div>}
+            <button type="button" disabled={saving || !name.trim() || !currentUser?.id} onClick={goConfirm} style={{ width: "100%", background: name.trim() && currentUser?.id ? m.color : "#ddd", color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 15, cursor: name.trim() && currentUser?.id ? "pointer" : "not-allowed", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving…" : "Confirm Booking"}</button>
+          </>
+        )}
+        {step === 3 && (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+            <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>Slot Confirmed!</div>
+            <div style={{ fontSize: 14, color: "#666", marginBottom: 20 }}>{day.day} {day.slots[selSlot]?.time}</div>
+            <button type="button" onClick={() => window.open(`https://wa.me/${m.wa}?text=${encodeURIComponent(`Hi ${m.name}! I booked your ${day.slots[selSlot]?.time} slot. My name is ${name}.`)}`)} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 10 }}>💬 Message on WhatsApp</button>
+            <button type="button" onClick={onClose} style={{ width: "100%", background: "none", border: "1px solid #ddd", borderRadius: 12, padding: "12px", fontWeight: 600, fontSize: 14, cursor: "pointer", color: "#666" }}>Done ✓</button>
+          </div>
+        )}
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function JoinForm({m,onClose}){
@@ -115,7 +168,7 @@ function JoinForm({m,onClose}){
   </div>;
 }
 
-function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoading,onMemberUpdated}){
+function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoading,onMemberUpdated,currentUser,onBooked}){
   const [tab,setTab]=useState("about");
   const [joinOpen,setJoinOpen]=useState(false);
   const [bookOpen,setBookOpen]=useState(false);
@@ -135,9 +188,10 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
     return m1?.[1] || "";
   };
   const youtubeId=extractYouTubeId(youtubeUrl);
+  const canEditProfile = Boolean(currentUser?.id && m.ownerId && String(m.ownerId) === String(currentUser.id));
 
   const uploadAvatar=async(file)=>{
-    if(!file) return;
+    if(!file||!canEditProfile) return;
     setUploading(true);
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `${m.id}-${Date.now()}.${ext}`;
@@ -153,6 +207,7 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
   };
 
   const saveYoutube=async()=>{
+    if(!canEditProfile) return;
     setSavingVideo(true);
     const { error } = await supabase.from("members").update({ youtube_url: youtubeUrl.trim() || null }).eq("id", m.id);
     if(!error){
@@ -170,9 +225,9 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
       <div style={{textAlign:"center",position:"relative"}}>
         <div style={{width:100,height:100,margin:"0 auto",marginTop:8,position:"relative"}}>
           {m.avatarUrl?<img src={m.avatarUrl} alt={m.name} style={{width:100,height:100,borderRadius:"50%",objectFit:"cover",border:"4px solid #fff",boxShadow:"0 8px 20px rgba(0,0,0,0.2)"}}/>:<Avatar initials={m.photo} color="rgba(255,255,255,0.3)" size={100}/>}
-          <label style={{position:"absolute",right:0,bottom:0,width:30,height:30,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",cursor:"pointer",boxShadow:"0 3px 10px rgba(0,0,0,0.2)"}}>📷
+          {currentUser?.id && m.ownerId && String(m.ownerId)===String(currentUser.id)&&<label style={{position:"absolute",right:0,bottom:0,width:30,height:30,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",cursor:"pointer",boxShadow:"0 3px 10px rgba(0,0,0,0.2)"}}>📷
             <input type="file" accept="image/*" style={{display:"none"}} onChange={(e)=>uploadAvatar(e.target.files?.[0])}/>
-          </label>
+          </label>}
         </div>
         {uploading&&<div style={{fontSize:11,color:"#fff",marginTop:6}}>Uploading photo...</div>}
         <div style={{color:"#fff",fontSize:22,fontWeight:800,marginTop:12}}>{m.name} {m.verified&&"✓"} {m.plan==="elite"&&"🌟"}</div>
@@ -221,11 +276,15 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
         <div style={{background:"#fff",borderRadius:14,overflow:"hidden",marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}>
           <div style={{padding:"12px 16px 8px",fontWeight:700,fontSize:14,color:m.color}}>My Video</div>
           <div style={{padding:"0 16px 14px"}}>
+            {canEditProfile ? (
             <div style={{display:"flex",gap:8,marginBottom:10}}>
               <input value={youtubeUrl} onChange={(e)=>setYoutubeUrl(e.target.value)} placeholder="Paste YouTube URL" style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1px solid #ddd",fontSize:13}}/>
               <button type="button" onClick={saveYoutube} disabled={savingVideo} style={{background:m.color,color:"#fff",border:"none",borderRadius:10,padding:"0 12px",fontWeight:700,fontSize:12,cursor:"pointer"}}>{savingVideo?"Saving":"Save"}</button>
             </div>
-            {youtubeId?<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #eee"}}><iframe title="youtube-video" src={`https://www.youtube.com/embed/${youtubeId}`} style={{width:"100%",aspectRatio:"16/9",border:0}} allowFullScreen/></div>:<div style={{border:"1px dashed #d8d8d8",borderRadius:12,padding:"18px 12px",textAlign:"center",fontSize:12,color:"#888"}}>No video added yet. Add YouTube URL above.</div>}
+            ) : (
+            <div style={{fontSize:12,color:"#888",marginBottom:10}}>{youtubeId ? "" : "No video on this profile yet."}</div>
+            )}
+            {youtubeId?<div style={{borderRadius:12,overflow:"hidden",border:"1px solid #eee"}}><iframe title="youtube-video" src={`https://www.youtube.com/embed/${youtubeId}`} style={{width:"100%",aspectRatio:"16/9",border:0}} allowFullScreen/></div>:<div style={{border:"1px dashed #d8d8d8",borderRadius:12,padding:"18px 12px",textAlign:"center",fontSize:12,color:"#888"}}>{canEditProfile ? "No video added yet. Add YouTube URL above." : "No video on this profile yet."}</div>}
           </div>
         </div>
         <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:14,boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}><div style={{fontWeight:700,fontSize:14,marginBottom:12,color:m.color}}>Social Media</div>
@@ -296,16 +355,16 @@ function PersonalWebsite({m,onHome,onChat,onToggleFollow,isFollowing,followLoadi
       <button onClick={()=>onChat(m)} style={{flex:1,background:"#f5f5f5",color:"#333",border:"0.5px solid #eee",borderRadius:12,padding:"12px",fontWeight:600,fontSize:14,cursor:"pointer"}}>💬 Message</button>
       {m.plan==="elite"&&avail>0?<button onClick={()=>setBookOpen(true)} style={{flex:2,background:m.color,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:700,fontSize:15,cursor:"pointer"}}>📅 Book Appointment</button>:<button onClick={()=>setJoinOpen(true)} style={{flex:2,background:m.color,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:700,fontSize:15,cursor:"pointer"}}>🎯 Join My Team</button>}
     </div>
-    {bookOpen&&<BookingModal m={m} onClose={()=>setBookOpen(false)}/>}
+    {bookOpen&&<BookingModal m={m} currentUser={currentUser} onClose={()=>setBookOpen(false)} onBooked={onBooked}/>}
     {joinOpen&&<JoinForm m={m} onClose={()=>setJoinOpen(false)}/>}
   </div>;
 }
 
 function ChatModal({m,onClose,user}){
   const [msg,setMsg]=useState("");
-  const { messages, sendMessage } = useChat(user, m);
+  const { messages, sendMessage, peerMissing } = useChat(user, m);
   const send=async()=>{
-    if(!msg.trim())return;
+    if(!msg.trim()||peerMissing)return;
     await sendMessage(msg);
     setMsg("");
   };
@@ -317,12 +376,13 @@ function ChatModal({m,onClose,user}){
         <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#888"}}>✕</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:10}}>
-        {messages.length===0&&<div style={{fontSize:12,color:"#999",textAlign:"center",paddingTop:10}}>Start conversation with {m.name}</div>}
+        {peerMissing&&<div style={{fontSize:12,color:"#E24B4A",textAlign:"center",padding:"8px",background:"#fff5f5",borderRadius:10}}>This profile is not linked to a login yet — chat is unavailable.</div>}
+        {!peerMissing&&messages.length===0&&<div style={{fontSize:12,color:"#999",textAlign:"center",paddingTop:10}}>Start conversation with {m.name}</div>}
         {messages.map((m2)=><div key={m2.id} style={{display:"flex",justifyContent:String(m2.sender_id)===String(user?.id)?"flex-end":"flex-start"}}><div style={{background:String(m2.sender_id)===String(user?.id)?m.color+"22":"#f5f5f5",borderRadius:String(m2.sender_id)===String(user?.id)?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",maxWidth:"75%",fontSize:13}}><div>{m2.text}</div><div style={{fontSize:10,color:"#999",marginTop:3,textAlign:"right"}}>{new Date(m2.created_at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</div></div></div>)}
       </div>
       <div style={{padding:12,borderTop:"0.5px solid #eee",display:"flex",gap:8}}>
-        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Type a message..." style={{flex:1,fontSize:14,borderRadius:20,padding:"8px 14px",border:"1px solid #ddd",outline:"none"}}/>
-        <button onClick={send} disabled={!user} style={{background:m.color,color:"#fff",border:"none",borderRadius:20,padding:"8px 16px",fontWeight:700,cursor:"pointer",opacity:user?1:0.5}}>Send</button>
+        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!peerMissing&&send()} placeholder="Type a message..." disabled={peerMissing} style={{flex:1,fontSize:14,borderRadius:20,padding:"8px 14px",border:"1px solid #ddd",outline:"none",opacity:peerMissing?0.5:1}}/>
+        <button type="button" onClick={send} disabled={!user||peerMissing} style={{background:m.color,color:"#fff",border:"none",borderRadius:20,padding:"8px 16px",fontWeight:700,cursor:"pointer",opacity:user&&!peerMissing?1:0.5}}>Send</button>
       </div>
     </div>
   </div>;
@@ -495,128 +555,274 @@ function AuthModal({ onClose, onSuccess }) {
   );
 }
 
-function MemberDashboard({user,onHome,membersData,onOpenChat}){
-  const [tab,setTab]=useState("overview");
-  const [messages,setMessages]=useState([
-    {id:1,from:"Priya Sharma",photo:"PS",color:"#D4537E",text:"Hi! Interested in joining your team...",time:"2h ago",read:false},
-    {id:2,from:"Ravi Mehta",photo:"RM",color:"#185FA5",text:"Can we connect for a quick call?",time:"5h ago",read:false},
-    {id:3,from:"Amit Patel",photo:"AP",color:"#1D9E75",text:"Loved your profile! Let's collaborate.",time:"1d ago",read:true},
-    {id:4,from:"Deepa Nair",photo:"DN",color:"#993C1D",text:"Are you open to new opportunities?",time:"2d ago",read:true},
-  ]);
-  const [bookmarks,setBookmarks]=useState((membersData||[]).slice(1,4));
-  const [conversationList,setConversationList]=useState([]);
-  const unread=messages.filter(m=>!m.read).length;
-  const markRead=id=>setMessages(prev=>prev.map(m=>m.id===id?{...m,read:true}:m));
+function MemberDashboard({ user, myMemberProfile, membersData, notifications, onHome, onOpenChat, onBookingsChanged }) {
+  const [tab, setTab] = useState("overview");
+  const [conversationList, setConversationList] = useState([]);
+  const [bookingsRows, setBookingsRows] = useState([]);
+  const [stats, setStats] = useState({ followers: 0, chats: 0, bookings: 0 });
 
-  useEffect(()=>{
-    if(!user?.id) return;
-    let active=true;
-    const loadConversations=async()=>{
+  const msgUnread = (notifications || []).filter((n) => !n.read && n.type === "message").length;
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    const loadConversations = async () => {
       const { data } = await supabase
         .from("conversations")
         .select("*")
         .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
-        .order("last_message_time",{ascending:false});
-      if(active) setConversationList(data||[]);
+        .order("last_message_time", { ascending: false });
+      if (active) setConversationList(data || []);
     };
     loadConversations();
     const channel = supabase
       .channel(`dashboard-conversations-${user.id}`)
-      .on("postgres_changes",{event:"*",schema:"public",table:"conversations"},()=>loadConversations())
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => loadConversations())
       .subscribe();
-    return ()=>{ active=false; supabase.removeChannel(channel); };
-  },[user?.id]);
-  return <div style={{position:"fixed",inset:0,background:"#f8f8f8",zIndex:1500,overflowY:"auto",fontFamily:"system-ui,sans-serif"}}>
-    <div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px 80px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div style={{fontWeight:800,fontSize:20}}>👤 My Dashboard</div>
-        <button type="button" onClick={onHome} style={{background:"none",border:"0.5px solid #ddd",borderRadius:20,padding:"6px 16px",cursor:"pointer",fontSize:13,color:"#666"}}>← Home</button>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-        {[["👁️","Views","1,240"],["💬","Messages",messages.length],["📅","Bookings","5"],["🔖","Saved",bookmarks.length]].map(([icon,label,val])=><div key={label} style={{background:"#fff",borderRadius:12,padding:"14px",textAlign:"center",boxShadow:"0 1px 8px rgba(0,0,0,0.06)",position:"relative"}}>
-          {label==="Messages"&&unread>0&&<div style={{position:"absolute",top:8,right:8,background:"#E24B4A",color:"#fff",borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{unread}</div>}
-          <div style={{fontSize:22}}>{icon}</div><div style={{fontWeight:800,fontSize:20,marginTop:4}}>{val}</div><div style={{fontSize:11,color:"#999",marginTop:2}}>{label}</div>
-        </div>)}
-      </div>
-      <div style={{display:"flex",gap:8,marginBottom:16,overflowX:"auto"}}>
-        {[["overview","Overview"],["profile","Profile"],["bookings","Bookings"],["messages",`Messages${unread>0?` (${unread})`:""}`],["bookmarks","Bookmarks"],["refer","Refer & Earn"]].map(([id,label])=><button key={id} onClick={()=>setTab(id)} style={{flexShrink:0,background:tab===id?"#7F77DD":"#fff",color:tab===id?"#fff":"#666",border:"0.5px solid #ddd",borderRadius:20,padding:"7px 16px",fontSize:13,fontWeight:tab===id?700:400,cursor:"pointer"}}>{label}</button>)}
-      </div>
-      {tab==="overview"&&<div>
-        <div style={{background:"#fff",borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
-          <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:16}}>
-            <Avatar initials={user.name.slice(0,2).toUpperCase()} color="#7F77DD" size={70}/>
-            <div><div style={{fontWeight:800,fontSize:18}}>{user.name}</div><div style={{fontSize:13,color:"#666"}}>{user.email}</div><div style={{fontSize:12,background:"#7F77DD18",color:"#7F77DD",borderRadius:20,padding:"2px 10px",display:"inline-block",marginTop:6,fontWeight:600}}>Free Plan</div></div>
-          </div>
-          <div style={{background:"#f8f8f8",borderRadius:10,padding:"10px 14px",fontSize:13}}>🔗 <span style={{color:"#7F77DD",fontWeight:700}}>topmlmleaders.com/your-name</span></div>
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !myMemberProfile?.id) return;
+    let active = true;
+    const mid = myMemberProfile.id;
+    const load = async () => {
+      const { count } = await supabase
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .or(`member_id.eq.${mid},booker_id.eq.${user.id}`);
+      const { data: conv } = await supabase.from("conversations").select("id").or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`);
+      if (!active) return;
+      setStats({
+        followers: myMemberProfile.followerCount || 0,
+        chats: conv?.length || 0,
+        bookings: count ?? 0,
+      });
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, myMemberProfile?.id, myMemberProfile?.followerCount, onBookingsChanged]);
+
+  useEffect(() => {
+    if (!user?.id || !myMemberProfile?.id) return;
+    let active = true;
+    const loadBook = async () => {
+      const mid = myMemberProfile.id;
+      const { data } = await supabase
+        .from("bookings")
+        .select("*")
+        .or(`member_id.eq.${mid},booker_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
+      if (active) setBookingsRows(data || []);
+    };
+    loadBook();
+    const ch = supabase
+      .channel(`dashboard-bookings-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => loadBook())
+      .subscribe();
+    return () => {
+      active = false;
+      supabase.removeChannel(ch);
+    };
+  }, [user?.id, myMemberProfile?.id, onBookingsChanged]);
+
+  const resolvePeerMember = (otherAuthId) =>
+    (membersData || []).find((x) => x.ownerId && String(x.ownerId) === String(otherAuthId));
+
+  const activityItems = (notifications || []).slice(0, 8);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#f8f8f8", zIndex: 1500, overflowY: "auto", fontFamily: "system-ui,sans-serif" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 16px max(80px, calc(16px + env(safe-area-inset-bottom, 0px)))" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontWeight: 800, fontSize: 20 }}>👤 My Dashboard</div>
+          <button type="button" onClick={onHome} style={{ background: "none", border: "0.5px solid #ddd", borderRadius: 20, padding: "6px 16px", cursor: "pointer", fontSize: 13, color: "#666" }}>← Home</button>
         </div>
-        <div style={{background:"#7F77DD11",border:"1px solid #7F77DD33",borderRadius:12,padding:16}}>
-          <div style={{fontWeight:700,color:"#7F77DD",marginBottom:8}}>🔔 Recent Activity</div>
-          {[{text:"Priya Sharma viewed your profile",time:"2m ago",icon:"👁️"},{text:"Ravi Mehta bookmarked you",time:"15m ago",icon:"🔖"},{text:"3 new searches found you",time:"1h ago",icon:"🔍"},{text:"New booking request",time:"2h ago",icon:"📅"}].map((n,i)=><div key={i} style={{display:"flex",gap:10,alignItems:"center",padding:"8px 0",borderBottom:i<3?"0.5px solid #7F77DD22":"none"}}>
-            <span style={{fontSize:18}}>{n.icon}</span><div style={{flex:1,fontSize:13}}>{n.text}</div><div style={{fontSize:11,color:"#999"}}>{n.time}</div>
-          </div>)}
-        </div>
-      </div>}
-      {tab==="profile"&&<div style={{background:"#fff",borderRadius:14,padding:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:16}}>Edit My Profile</div>
-        {[["Full Name",user.name],["Company",""],["Role",""],["City",""],["Country","India"],["WhatsApp",""],["Earnings",""],["Team Size",""]].map(([label,val])=><div key={label} style={{marginBottom:14}}>
-          <div style={{fontSize:12,color:"#999",marginBottom:4}}>{label}</div>
-          <input defaultValue={val} placeholder={`Enter ${label}`} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
-        </div>)}
-        <button style={{background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"12px 24px",fontWeight:700,cursor:"pointer",fontSize:14}}>Save Changes</button>
-      </div>}
-      {tab==="bookings"&&<div>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>📅 My Bookings</div>
-        {[{name:"Amit Patel",city:"Ahmedabad",time:"Today 6PM",type:"📞 Call",status:"Pending",wa:"919714000002"},{name:"Neha Singh",city:"Mumbai",time:"Tomorrow 5PM",type:"💬 WA Video",status:"Confirmed",wa:"919999000000"}].map((b,i)=><div key={i} style={{background:"#fff",borderRadius:12,padding:16,marginBottom:10,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,fontSize:14}}>{b.name}</div><div style={{fontSize:12,color:"#999"}}>📍 {b.city} · {b.time}</div><div style={{fontSize:12,color:"#666"}}>{b.type}</div></div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-            <span style={{fontSize:12,background:b.status==="Confirmed"?"#1D9E7518":"#EF9F2718",color:b.status==="Confirmed"?"#1D9E75":"#EF9F27",borderRadius:20,padding:"3px 10px",fontWeight:600}}>{b.status}</span>
-            <button onClick={()=>window.open(`https://wa.me/${b.wa}`)} style={{background:"#25D366",color:"#fff",border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>💬 WA</button>
-          </div>
-        </div>)}
-      </div>}
-      {tab==="messages"&&<div>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:10}}>Realtime Conversations</div>
-        {conversationList.map((c)=><button key={c.id} type="button" onClick={()=>{const otherId=String(c.member1_id)===String(user.id)?c.member2_id:c.member1_id; const target=(membersData||[]).find(x=>String(x.id)===String(otherId)); if(target) onOpenChat?.(target);}} style={{width:"100%",textAlign:"left",background:"#fff",border:"0.5px solid #eee",borderRadius:12,padding:12,marginBottom:8,cursor:"pointer"}}>
-          <div style={{fontSize:13,fontWeight:700}}>{c.last_message||"Open chat"}</div>
-          <div style={{fontSize:11,color:"#999",marginTop:4}}>{c.last_message_time?new Date(c.last_message_time).toLocaleString():""}</div>
-        </button>)}
-        <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>💬 Messages {unread>0&&<span style={{background:"#E24B4A",color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:12,fontWeight:700,marginLeft:6}}>{unread} new</span>}</div>
-        {messages.map(msg=><div key={msg.id} onClick={()=>markRead(msg.id)} style={{background:msg.read?"#fff":"#7F77DD06",borderRadius:12,padding:14,marginBottom:10,display:"flex",gap:12,alignItems:"center",boxShadow:"0 1px 6px rgba(0,0,0,0.06)",cursor:"pointer",border:msg.read?"0.5px solid #eee":"1.5px solid #7F77DD44"}}>
-          <Avatar initials={msg.photo} color={msg.color} size={44}/>
-          <div style={{flex:1}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontWeight:msg.read?600:800,fontSize:14}}>{msg.from}</div>
-              {!msg.read&&<span style={{fontSize:10,background:"#7F77DD",color:"#fff",borderRadius:20,padding:"2px 6px",fontWeight:700}}>NEW</span>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 12, marginBottom: 20 }}>
+          {[
+            ["👥", "Followers", stats.followers],
+            ["💬", "Chats", stats.chats],
+            ["📅", "Bookings", stats.bookings],
+            ["🔔", "Alerts", (notifications || []).filter((n) => !n.read).length],
+          ].map(([icon, label, val]) => (
+            <div key={label} style={{ background: "#fff", borderRadius: 12, padding: "14px", textAlign: "center", boxShadow: "0 1px 8px rgba(0,0,0,0.06)", position: "relative" }}>
+              {label === "Alerts" && (notifications || []).filter((n) => !n.read).length > 0 && (
+                <div style={{ position: "absolute", top: 8, right: 8, background: "#E24B4A", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>
+                  {(notifications || []).filter((n) => !n.read).length}
+                </div>
+              )}
+              <div style={{ fontSize: 22 }}>{icon}</div>
+              <div style={{ fontWeight: 800, fontSize: 20, marginTop: 4 }}>{val}</div>
+              <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{label}</div>
             </div>
-            <div style={{fontSize:12,color:"#666",marginTop:2}}>{msg.text}</div>
-            <div style={{fontSize:11,color:"#999",marginTop:2}}>{msg.time}</div>
-          </div>
-        </div>)}
-      </div>}
-      {tab==="bookmarks"&&<div>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>🔖 Saved Profiles ({bookmarks.length})</div>
-        {bookmarks.length>0?bookmarks.map((m,i)=><div key={i} style={{background:"#fff",borderRadius:12,padding:14,marginBottom:10,display:"flex",gap:12,alignItems:"center",boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}>
-          <Avatar initials={m.photo} color={m.color} size={48}/>
-          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{m.name}</div><div style={{fontSize:12,color:"#666"}}>{m.role} · {m.company}</div><div style={{fontSize:12,color:"#999"}}>📍 {m.city}, {m.country}</div></div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>window.open(`https://wa.me/${m.wa}`)} style={{background:"#25D36618",color:"#25D366",border:"0.5px solid #25D36633",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer",fontWeight:600}}>💬</button>
-            <button onClick={()=>setBookmarks(bookmarks.filter(b=>b.id!==m.id))} style={{background:"#E24B4A18",color:"#E24B4A",border:"0.5px solid #E24B4A33",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer",fontWeight:600}}>✕</button>
-          </div>
-        </div>):<div style={{textAlign:"center",padding:"40px",color:"#999",fontSize:14}}>No saved profiles yet.<br/>Tap 🔖 on any member card!</div>}
-      </div>}
-      {tab==="refer"&&<div style={{background:"#fff",borderRadius:14,padding:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{textAlign:"center",marginBottom:20}}><div style={{fontSize:36,marginBottom:8}}>💰</div><div style={{fontWeight:800,fontSize:20}}>Refer & Earn</div></div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
-          {[["₹50","Per signup"],["₹199","Per Pro"],["₹1,250","This month"]].map(([v,l])=><div key={l} style={{background:"#7F77DD11",borderRadius:12,padding:"14px 8px",textAlign:"center",border:"0.5px solid #7F77DD33"}}><div style={{fontWeight:800,fontSize:16,color:"#7F77DD"}}>{v}</div><div style={{fontSize:11,color:"#999",marginTop:2}}>{l}</div></div>)}
+          ))}
         </div>
-        <div style={{background:"#f8f8f8",borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontSize:11,color:"#999",marginBottom:2}}>Your referral link</div><div style={{fontSize:13,fontWeight:700,color:"#7F77DD"}}>topmlmleaders.com/ref/{user.name.toLowerCase().replace(" ","-")}</div></div>
-          <button onClick={()=>navigator.clipboard?.writeText(`https://topmlmleaders.com/ref/${user.name.toLowerCase().replace(" ","-")}`)} style={{background:"#7F77DD",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Copy</button>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+          {[
+            ["overview", "Overview"],
+            ["profile", "Profile"],
+            ["bookings", "Bookings"],
+            ["messages", `Messages${msgUnread > 0 ? ` (${msgUnread})` : ""}`],
+            ["bookmarks", "Bookmarks"],
+            ["refer", "Refer & Earn"],
+          ].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setTab(id)} style={{ flexShrink: 0, background: tab === id ? "#7F77DD" : "#fff", color: tab === id ? "#fff" : "#666", border: "0.5px solid #ddd", borderRadius: 20, padding: "7px 16px", fontSize: 13, fontWeight: tab === id ? 700 : 400, cursor: "pointer" }}>
+              {label}
+            </button>
+          ))}
         </div>
-        <button style={{width:"100%",background:"#25D366",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontWeight:700,fontSize:14,cursor:"pointer"}}>💬 Share on WhatsApp</button>
-      </div>}
+        {tab === "overview" && (
+          <div>
+            <div style={{ background: "#fff", borderRadius: 14, padding: 20, marginBottom: 14, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
+                <Avatar initials={user.name.slice(0, 2).toUpperCase()} color="#7F77DD" size={70} />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}>{user.name}</div>
+                  <div style={{ fontSize: 13, color: "#666" }}>{user.email}</div>
+                  <div style={{ fontSize: 12, background: "#7F77DD18", color: "#7F77DD", borderRadius: 20, padding: "2px 10px", display: "inline-block", marginTop: 6, fontWeight: 600 }}>{(myMemberProfile?.plan || user.plan || "free").replace(/^\w/, (c) => c.toUpperCase())} plan</div>
+                </div>
+              </div>
+              <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "10px 14px", fontSize: 13 }}>
+                🔗{" "}
+                <span style={{ color: "#7F77DD", fontWeight: 700 }}>
+                  topmlmleaders.com/{myMemberProfile?.slug || "your-profile"}
+                </span>
+              </div>
+            </div>
+            <div style={{ background: "#7F77DD11", border: "1px solid #7F77DD33", borderRadius: 12, padding: 16 }}>
+              <div style={{ fontWeight: 700, color: "#7F77DD", marginBottom: 8 }}>🔔 Recent Activity</div>
+              {activityItems.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>No activity yet. Follows, messages, and bookings will show here.</div>}
+              {activityItems.map((n, i) => (
+                <div key={n.id || i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: i < activityItems.length - 1 ? "0.5px solid #7F77DD22" : "none" }}>
+                  <span style={{ fontSize: 18 }}>{n.type === "follow" ? "👥" : n.type === "message" ? "💬" : n.type === "booking" ? "📅" : "🔔"}</span>
+                  <div style={{ flex: 1, fontSize: 13 }}>{n.text}</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>{n.created_at ? new Date(n.created_at).toLocaleString() : ""}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab === "profile" && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Edit My Profile</div>
+            {[
+              ["Full Name", user.name],
+              ["Company", myMemberProfile?.company || ""],
+              ["Role", myMemberProfile?.role || ""],
+              ["City", myMemberProfile?.city || ""],
+              ["Country", myMemberProfile?.country || "India"],
+              ["WhatsApp", myMemberProfile?.wa === "private" ? "" : myMemberProfile?.wa || ""],
+              ["Earnings", myMemberProfile?.earnings || ""],
+              ["Team Size", myMemberProfile?.team || ""],
+            ].map(([label, val]) => (
+              <div key={label} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>{label}</div>
+                <input defaultValue={val} placeholder={`Enter ${label}`} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+              </div>
+            ))}
+            <button type="button" style={{ background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+              Save Changes
+            </button>
+          </div>
+        )}
+        {tab === "bookings" && (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>📅 Bookings</div>
+            {bookingsRows.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#999", fontSize: 14 }}>No bookings yet.</div>}
+            {bookingsRows.map((b) => {
+              const host = (membersData || []).find((x) => String(x.id) === String(b.member_id));
+              const iAmHost = myMemberProfile && String(b.member_id) === String(myMemberProfile.id);
+              const title = iAmHost ? (b.booker_name || "Someone") : host?.name || "Host";
+              const sub = iAmHost ? `Incoming · ${b.slot_day || ""}` : `${host?.city || ""} · ${b.slot_day || ""}`;
+              const wa = iAmHost ? undefined : host?.wa;
+              const st = (b.status || "pending").toLowerCase();
+              return (
+                <div key={b.id} style={{ background: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, boxShadow: "0 1px 6px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
+                    <div style={{ fontSize: 12, color: "#999" }}>{sub}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      {b.slot_time} {b.slot_type ? `· ${b.slot_type}` : ""}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                    <span style={{ fontSize: 12, background: st === "confirmed" ? "#1D9E7518" : "#EF9F2718", color: st === "confirmed" ? "#1D9E75" : "#EF9F27", borderRadius: 20, padding: "3px 10px", fontWeight: 600 }}>{st.charAt(0).toUpperCase() + st.slice(1)}</span>
+                    {!iAmHost && wa && wa !== "private" && (
+                      <button type="button" onClick={() => window.open(`https://wa.me/${wa}`)} style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        💬 WA
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {tab === "messages" && (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>Conversations</div>
+            {conversationList.length === 0 && <div style={{ fontSize: 13, color: "#999", marginBottom: 12 }}>No conversations yet. Message someone from their profile.</div>}
+            {conversationList.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  const otherId = String(c.member1_id) === String(user.id) ? c.member2_id : c.member1_id;
+                  const target = resolvePeerMember(otherId);
+                  if (target) onOpenChat?.(target);
+                }}
+                style={{ width: "100%", textAlign: "left", background: "#fff", border: "0.5px solid #eee", borderRadius: 12, padding: 12, marginBottom: 8, cursor: "pointer" }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{c.last_message || "Open chat"}</div>
+                <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>{c.last_message_time ? new Date(c.last_message_time).toLocaleString() : ""}</div>
+              </button>
+            ))}
+          </div>
+        )}
+        {tab === "bookmarks" && (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>🔖 Saved Profiles</div>
+            <div style={{ textAlign: "center", padding: "40px", color: "#999", fontSize: 14 }}>Bookmarks sync is coming soon.<br />Use directory search for now.</div>
+          </div>
+        )}
+        {tab === "refer" && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>💰</div>
+              <div style={{ fontWeight: 800, fontSize: 20 }}>Refer & Earn</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 10, marginBottom: 20 }}>
+              {[
+                ["—", "Per signup"],
+                ["—", "Per Pro"],
+                ["—", "This month"],
+              ].map(([v, l]) => (
+                <div key={l} style={{ background: "#7F77DD11", borderRadius: 12, padding: "14px 8px", textAlign: "center", border: "0.5px solid #7F77DD33" }}>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: "#7F77DD" }}>{v}</div>
+                  <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: "#f8f8f8", borderRadius: 10, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>Your referral link</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#7F77DD" }}>topmlmleaders.com/ref/{user.name.toLowerCase().replace(/\s+/g, "-")}</div>
+              </div>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(`https://topmlmleaders.com/ref/${user.name.toLowerCase().replace(/\s+/g, "-")}`)} style={{ background: "#7F77DD", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                Copy
+              </button>
+            </div>
+            <button type="button" style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>💬 Share on WhatsApp</button>
+          </div>
+        )}
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function AdminPanel({onHome,membersData}){
@@ -873,6 +1079,7 @@ export default function App(){
   const [showNotifications,setShowNotifications]=useState(false);
   const [showOnboarding,setShowOnboarding]=useState(false);
   const [myMemberProfile,setMyMemberProfile]=useState(null);
+  const [bookingsVersion,setBookingsVersion]=useState(0);
 
   const { isFollowing, toggleFollow, followingCount, loading: followLoading } = useFollow(currentUser, membersData, setMembersData);
   const { notifications, unreadCount: unreadNotifications, markAllRead } = useNotifications(currentUser);
@@ -923,6 +1130,7 @@ export default function App(){
         slots:[],
         followerCount:m.follower_count||0,
         followingCount:m.following_count||0,
+        ownerId:m.owner_id||null,
       }));
       setMembersData(mapped);
     };
@@ -1082,6 +1290,8 @@ export default function App(){
       isFollowing={isFollowing(profileView.id)}
       followLoading={followLoading}
       onMemberUpdated={handleMemberUpdated}
+      currentUser={currentUser}
+      onBooked={() => setBookingsVersion((v) => v + 1)}
     />
     {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
   </>;
@@ -1113,7 +1323,7 @@ export default function App(){
         </>}
       </div>
     </div>
-    <div style={{maxWidth:1400,margin:"0 auto",padding:"16px 20px 90px"}}>
+    <div style={{maxWidth:1400,margin:"0 auto",padding:"16px 20px calc(90px + env(safe-area-inset-bottom, 0px))"}}>
       {tab==="directory"&&<>
         {query&&<div style={{fontSize:13,color:"#666",marginBottom:12}}>{filtered.length} result{filtered.length!==1?"s":""} found</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16}}>
@@ -1174,7 +1384,7 @@ export default function App(){
         </div>}
       </div>}
     </div>
-    <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"0.5px solid #eee",display:"flex",zIndex:100}}>
+    <div className="app-bottom-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"0.5px solid #eee",display:"flex",zIndex:100}}>
       {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 14px",background:"none",border:"none",cursor:"pointer",color:tab===t.id?"#7F77DD":"#999",position:"relative"}}>
         <span style={{fontSize:18}}>{t.icon}</span>
         {t.id==="me"&&unreadMessages>0&&<span style={{position:"absolute",top:6,right:"28%",background:"#E24B4A",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9}}>{unreadMessages}</span>}
@@ -1182,7 +1392,7 @@ export default function App(){
       </button>)}
     </div>
     {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSuccess={()=>setShowAuth(false)}/>}
-    {showDashboard&&currentUser&&<MemberDashboard user={currentUser} membersData={membersData} onHome={goHome} onOpenChat={openChatForMember}/>}
+    {showDashboard&&currentUser&&<MemberDashboard user={currentUser} myMemberProfile={myMemberProfile} membersData={membersData} notifications={notifications} onHome={goHome} onOpenChat={openChatForMember} onBookingsChanged={bookingsVersion}/>}
     {showAdmin&&<AdminPanel membersData={membersData} onHome={goHome}/>}
     {chat&&<ChatModal m={chat} user={currentUser} onClose={()=>setChat(null)}/>}
     {shareOpen&&<ShareSheet m={shareOpen} onClose={()=>setShareOpen(null)}/>}

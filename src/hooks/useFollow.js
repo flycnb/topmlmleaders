@@ -95,22 +95,6 @@ export function useFollow(user, membersData, setMembersData) {
           .update({ follower_count: (m?.follower_count || 0) + 1 })
           .eq("id", memberId)
           .catch(() => {});
-        const { data: recipient } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", member?.email || "")
-          .single();
-        if (recipient?.id) {
-          await supabase.from("notifications").insert({
-            user_id: recipient.id,
-            type: "follow",
-            from_name: user?.name || "Someone",
-            from_initials: (user?.name || "U").slice(0, 2).toUpperCase(),
-            from_color: "#7F77DD",
-            text: `${user?.name || "Someone"} followed you`,
-            link: `#/m/${member?.slug || ""}`,
-          }).catch(() => {});
-        }
         setFollowingIds((prev) => new Set(prev).add(String(memberId)));
         setMembersData((prev) =>
           prev.map((m) =>
@@ -131,4 +115,3 @@ export function useFollow(user, membersData, setMembersData) {
 
   return { isFollowing, toggleFollow, followingCount, loading };
 }
-
