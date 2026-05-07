@@ -12,16 +12,31 @@ export function useAuth() {
       if (!mounted) return;
       setSession(data.session ?? null);
       setLoading(false);
+      return data.session ?? null;
+    };
+    const syncSessionWithRetry = async (retries = 4, delayMs = 250) => {
+      let next = await syncSession();
+      let left = retries;
+      while (!next && left > 0 && mounted) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        next = await syncSession();
+        left -= 1;
+      }
     };
     const bootstrap = async () => {
       try {
         // Chrome can occasionally miss automatic URL exchange on OAuth return.
+        const hadCode = window.location.search.includes("code=");
         if (window.location.search.includes("code=")) {
           await supabase.auth.exchangeCodeForSession(window.location.href).catch(() => {});
           const cleaned = `${window.location.origin}${window.location.pathname}${window.location.hash || ""}`;
           window.history.replaceState(window.history.state, "", cleaned);
         }
-        await syncSession();
+        if (hadCode) {
+          await syncSessionWithRetry();
+        } else {
+          await syncSession();
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -35,7 +50,7 @@ export function useAuth() {
           setSession(nextSession);
           setLoading(false);
         } else {
-          await syncSession();
+          await syncSessionWithRetry();
         }
         return;
       }
