@@ -1061,7 +1061,6 @@ export default function App(){
   const { user: authUser, loading: authLoading } = useAuth();
   const [currentUser,setCurrentUser]=useState(null);
   const [membersData,setMembersData]=useState(MEMBERS);
-  const [membersReloadKey,setMembersReloadKey]=useState(0);
   const [showNotifications,setShowNotifications]=useState(false);
   const [myMemberProfile,setMyMemberProfile]=useState(null);
   const [bookingsVersion,setBookingsVersion]=useState(0);
@@ -1131,7 +1130,7 @@ export default function App(){
     };
     loadMembers();
     return ()=>{ mounted=false; };
-  },[membersReloadKey]);
+  },[]);
 
   useEffect(()=>{
     if (authLoading) return;
