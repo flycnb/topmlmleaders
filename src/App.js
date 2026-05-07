@@ -1049,71 +1049,6 @@ function ShareSheet({m,onClose}){
   </div>;
 }
 
-function OnboardingModal({ user, onClose, onCreated }) {
-  const [form, setForm] = useState({
-    name: user?.name || "",
-    city: "",
-    company: "",
-    role: "",
-    wa: "",
-  });
-  const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const save = async () => {
-    if (!form.name.trim() || !form.city.trim() || !form.company.trim() || !form.role.trim()) {
-      setMsg("Please fill all required fields");
-      return;
-    }
-    setBusy(true);
-    setMsg("");
-    const slugBase = `${form.name}-${form.city}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-    const slug = `${slugBase}-${Math.random().toString(36).slice(2, 6)}`;
-    const { error } = await supabase.from("members").insert({
-      name: form.name.trim(),
-      email: user?.email || "",
-      owner_id: user?.id || null,
-      city: form.city.trim(),
-      country: "India",
-      company: form.company.trim(),
-      role: form.role.trim(),
-      wa: form.wa.trim() || "private",
-      phone: "private",
-      photo_initials: form.name.trim().slice(0, 2).toUpperCase(),
-      color: "#7F77DD",
-      description: `${form.role.trim()} at ${form.company.trim()}.`,
-      slug,
-      plan: "free",
-      verified: false,
-      follower_count: 0,
-      following_count: 0,
-    });
-    if (error) {
-      setMsg(error.message || "Unable to create profile");
-      setBusy(false);
-      return;
-    }
-    onCreated?.();
-    onClose?.();
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, padding: 20 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Create your MLM profile</div>
-        <div style={{ fontSize: 12, color: "#777", marginBottom: 14 }}>Optional. You can complete this anytime.</div>
-        <input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Full Name *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
-        <input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} placeholder="City *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
-        <input value={form.company} onChange={(e)=>setForm({...form,company:e.target.value})} placeholder="Company *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
-        <input value={form.role} onChange={(e)=>setForm({...form,role:e.target.value})} placeholder="Role *" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
-        <input value={form.wa} onChange={(e)=>setForm({...form,wa:e.target.value})} placeholder="WhatsApp Number" style={{width:"100%",padding:"10px 12px",marginBottom:10,borderRadius:10,border:"1px solid #ddd"}} />
-        {msg && <div style={{fontSize:12,color:"#E24B4A",marginBottom:10}}>{msg}</div>}
-        <button type="button" disabled={busy} onClick={save} style={{width:"100%",background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,cursor:"pointer",opacity:busy?0.6:1}}>Save Profile</button>
-      </div>
-    </div>
-  );
-}
-
 export default function App(){
   const [query,setQuery]=useState("");
   const [tab,setTab]=useState("directory");
@@ -1128,7 +1063,6 @@ export default function App(){
   const [membersData,setMembersData]=useState(MEMBERS);
   const [membersReloadKey,setMembersReloadKey]=useState(0);
   const [showNotifications,setShowNotifications]=useState(false);
-  const [showOnboarding,setShowOnboarding]=useState(false);
   const [myMemberProfile,setMyMemberProfile]=useState(null);
   const [bookingsVersion,setBookingsVersion]=useState(0);
 
@@ -1229,7 +1163,6 @@ export default function App(){
   useEffect(()=>{
     if(!activeUser){
       setMyMemberProfile(null);
-      setShowOnboarding(false);
       return;
     }
     const mine = membersData.find((m)=>normalizeEmail(m.email)===normalizeEmail(activeUser.email));
@@ -1429,7 +1362,6 @@ export default function App(){
               <Avatar initials={activeUser.name.slice(0,2).toUpperCase()} color="#7F77DD" size={60}/>
               <div><div style={{fontWeight:800,fontSize:18}}>{activeUser.name}</div><div style={{fontSize:13,color:"#666"}}>{activeUser.email}</div></div>
             </div>
-            {!myMemberProfile&&<button type="button" onClick={()=>setShowOnboarding(true)} style={{width:"100%",background:"#EF9F2718",color:"#EF9F27",border:"1px solid #EF9F2744",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>⚡ Complete MLM Profile</button>}
             <button type="button" onClick={openDashboard} style={{width:"100%",background:"#7F77DD",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📊 Open Dashboard</button>
             <button onClick={()=>supabase.auth.signOut()} style={{width:"100%",background:"none",border:"0.5px solid #ddd",borderRadius:10,padding:"11px",fontWeight:600,fontSize:14,cursor:"pointer",color:"#666"}}>Logout</button>
           </div>
@@ -1452,7 +1384,6 @@ export default function App(){
     {showAdmin&&<AdminPanel membersData={membersData} onHome={goHome}/>}
     {chat&&<ChatModal m={chat} user={activeUser} onClose={()=>setChat(null)}/>}
     {shareOpen&&<ShareSheet m={shareOpen} onClose={()=>setShareOpen(null)}/>}
-    {showOnboarding&&activeUser&&<OnboardingModal user={activeUser} onClose={()=>setShowOnboarding(false)} onCreated={()=>setMembersReloadKey(x=>x+1)}/>}
     {showNotifications&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1400,display:"flex",alignItems:"flex-start",justifyContent:"center"}} onClick={()=>setShowNotifications(false)}>
       <div style={{background:"#fff",marginTop:70,width:"100%",maxWidth:460,borderRadius:14,padding:16,maxHeight:"72vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
