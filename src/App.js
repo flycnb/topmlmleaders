@@ -560,6 +560,18 @@ function MemberDashboard({ user, myMemberProfile, membersData, notifications, on
   const [conversationList, setConversationList] = useState([]);
   const [bookingsRows, setBookingsRows] = useState([]);
   const [stats, setStats] = useState({ followers: 0, chats: 0, bookings: 0 });
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    company: "",
+    role: "",
+    city: "",
+    country: "India",
+    wa: "",
+    earnings: "",
+    team: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
 
   const msgUnread = (notifications || []).filter((n) => !n.read && n.type === "message").length;
 
@@ -636,6 +648,44 @@ function MemberDashboard({ user, myMemberProfile, membersData, notifications, on
 
   const activityItems = (notifications || []).slice(0, 8);
 
+  useEffect(() => {
+    setProfileForm({
+      name: user?.name || "",
+      company: myMemberProfile?.company || "",
+      role: myMemberProfile?.role || "",
+      city: myMemberProfile?.city || "",
+      country: myMemberProfile?.country || "India",
+      wa: myMemberProfile?.wa === "private" ? "" : (myMemberProfile?.wa || ""),
+      earnings: myMemberProfile?.earnings || "",
+      team: myMemberProfile?.team || "",
+    });
+  }, [user?.name, myMemberProfile?.company, myMemberProfile?.role, myMemberProfile?.city, myMemberProfile?.country, myMemberProfile?.wa, myMemberProfile?.earnings, myMemberProfile?.team]);
+
+  const saveProfileChanges = async () => {
+    if (!user?.id) return;
+    setSavingProfile(true);
+    setProfileMsg("");
+    const { error } = await supabase
+      .from("members")
+      .update({
+        name: profileForm.name.trim(),
+        company: profileForm.company.trim(),
+        role: profileForm.role.trim(),
+        city: profileForm.city.trim(),
+        country: profileForm.country.trim() || "India",
+        wa: profileForm.wa.trim() || "private",
+        earnings: profileForm.earnings.trim(),
+        team_size: profileForm.team.trim(),
+      })
+      .eq("owner_id", user.id);
+    if (error) {
+      setProfileMsg(error.message || "Unable to save profile");
+    } else {
+      setProfileMsg("Profile saved successfully.");
+    }
+    setSavingProfile(false);
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "#f8f8f8", zIndex: 1500, overflowY: "auto", fontFamily: "system-ui,sans-serif" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 16px max(80px, calc(16px + env(safe-area-inset-bottom, 0px)))" }}>
@@ -711,21 +761,22 @@ function MemberDashboard({ user, myMemberProfile, membersData, notifications, on
           <div style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Edit My Profile</div>
             {[
-              ["Full Name", user.name],
-              ["Company", myMemberProfile?.company || ""],
-              ["Role", myMemberProfile?.role || ""],
-              ["City", myMemberProfile?.city || ""],
-              ["Country", myMemberProfile?.country || "India"],
-              ["WhatsApp", myMemberProfile?.wa === "private" ? "" : myMemberProfile?.wa || ""],
-              ["Earnings", myMemberProfile?.earnings || ""],
-              ["Team Size", myMemberProfile?.team || ""],
-            ].map(([label, val]) => (
+              ["Full Name", "name"],
+              ["Company", "company"],
+              ["Role", "role"],
+              ["City", "city"],
+              ["Country", "country"],
+              ["WhatsApp", "wa"],
+              ["Earnings", "earnings"],
+              ["Team Size", "team"],
+            ].map(([label, key]) => (
               <div key={label} style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>{label}</div>
-                <input defaultValue={val} placeholder={`Enter ${label}`} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box", outline: "none" }} />
+                <input value={profileForm[key]} onChange={(e)=>setProfileForm((prev)=>({ ...prev, [key]: e.target.value }))} placeholder={`Enter ${label}`} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box", outline: "none" }} />
               </div>
             ))}
-            <button type="button" style={{ background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+            {profileMsg && <div style={{ fontSize: 12, color: profileMsg.includes("success") ? "#1D9E75" : "#E24B4A", marginBottom: 10 }}>{profileMsg}</div>}
+            <button type="button" onClick={saveProfileChanges} disabled={savingProfile} style={{ background: "#7F77DD", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14, opacity: savingProfile ? 0.7 : 1 }}>
               Save Changes
             </button>
           </div>
