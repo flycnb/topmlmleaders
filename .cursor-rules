@@ -1,0 +1,64 @@
+# TopMLMLeaders.com — Cursor Rules
+# Cursor reads this automatically before every task.
+# NEVER break these rules.
+
+## TEAM
+- Product Owner: Rajnish Kumar (decides what to build)
+- Architect: Claude AI (reviews all code, writes tickets)
+- Coder: You (Cursor) — writes code only
+
+## YOUR ROLE
+You are the coder only. You do NOT decide what to build.
+You do NOT add features not asked for.
+You do NOT redesign UI unless ticket says so.
+You do NOT touch files outside the ticket scope.
+
+## GOLDEN RULES — NEVER BREAK
+1. One ticket = one task. Never do more than what ticket says.
+2. Never touch files not listed in ticket.
+3. Always run npm run build after every change.
+4. Always update FEATURE.md of affected feature.
+5. Always update docs/BUGS.md after fixing a bug.
+6. Always commit after every single task.
+7. Always push to main branch after commit.
+8. Stop and wait for approval before next task.
+9. Never rewrite working code to fix unrelated bug.
+10te old code when replacing. No dead code.
+
+## FOLDER STRUCTURE
+src/
+  App.js              (routing only, max 100 lines)
+  features/           (one folder per feature)
+  components/         (shared UI only)
+  lib/supabaseClient.js
+  pages/
+docs/
+  BRAIN.md
+  PHASES.md
+  BUGS.md
+
+## CODE RULES
+- JavaScript only. No TypeScript.
+- No external UI libraries. Inline styles only.
+- No CSS frameworks.
+- Always handle Supabase errors.
+- Always clean up realtime channels on unmount.
+- Mobile safe area on all bottom navs.
+- Loading states on every async action.
+- Empty states on every list.
+
+## DESIGN
+Primary: #6C63FF
+Success: #10B981
+Danger: #EF4444
+Background: #F7F8FC
+Font: Inter
+Card radius: 20px
+Shadow: 0 8px 32px rgba(0,0,0,0.08)
+
+## AFTER EVERY TASK
+- npm run build passes zero errors
+- FEATURE.md updated
+- Committed with clear message
+- Pushed to main
+- Stopped waiting for approval
