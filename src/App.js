@@ -3,6 +3,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import MemberProfile from "./features/profile";
 import Dashboard from "./features/dashboard";
+import AdminPanel from "./features/admin";
 import AuthModal from "./features/auth";
 import ChatModal from "./components/ChatModal";
 import { useAuth } from "./features/auth/useAuth";
@@ -51,6 +52,7 @@ function App() {
           onFlagMember={setFlagMember}
           onOpenChat={openChat}
           onOpenDashboard={() => setCurrentScreen("dashboard")}
+          onOpenAdmin={() => setCurrentScreen("admin")}
           onOpenProfile={(member) => {
             setSelectedMember(member);
             setCurrentScreen("profile");
@@ -121,7 +123,23 @@ function App() {
     );
   }
 
-  return <main style={{ padding: 24 }}>Admin Screen</main>;
+  if (currentScreen === "admin") {
+    if (user?.email !== "admin@topmlmleaders.com") {
+      return (
+        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, textAlign: "center" }}>
+          <div>
+            <h2>Admin access denied</h2>
+            <button type="button" onClick={() => setCurrentScreen("home")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "10px 16px", cursor: "pointer" }}>
+              Back to Home
+            </button>
+          </div>
+        </main>
+      );
+    }
+    return <AdminPanel user={user} onBack={() => setCurrentScreen("home")} />;
+  }
+
+  return <main style={{ padding: 24 }}>Unknown screen</main>;
 }
 
 export default App;
