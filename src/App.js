@@ -124,7 +124,7 @@ function App() {
   }
 
   if (currentScreen === "admin") {
-    if (user?.email !== "admin@topmlmleaders.com") {
+    if (user?.email !== "digidreamltd@gmail.com") {
       return (
         <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, textAlign: "center" }}>
           <div>
