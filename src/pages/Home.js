@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
 import { applyMemberSearch, mapMembers, SEARCH_FILTERS } from "../features/search";
@@ -73,10 +74,12 @@ function Home({
     loading: notificationsLoading,
   } = useNotifications(user);
 
-  async function handleLogout() {
-    setShowUserMenu(false);
-    setShowNotifications(false);
-    await onSignOut();
+  function handleLogout() {
+    flushSync(() => {
+      setShowUserMenu(false);
+      setShowNotifications(false);
+    });
+    void onSignOut();
   }
 
   function timeAgo(value) {
@@ -241,7 +244,9 @@ function Home({
 
         <section style={{ padding: "18px 16px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <strong style={{ fontSize: 15, color: "var(--color-text)" }}>{filteredMembers.length} leaders found</strong>
+            <strong style={{ fontSize: 15, color: "var(--color-text)" }}>
+              {isLoading ? "Loading leaders…" : `${filteredMembers.length} leaders found`}
+            </strong>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Elite first → by followers</span>
           </div>
           {isLoading ? (
@@ -311,7 +316,7 @@ function Home({
             display: "grid",
             placeItems: "center",
             pointerEvents: "auto",
-            cursor: "wait",
+            cursor: "default",
           }}
           aria-live="polite"
         >
@@ -430,7 +435,7 @@ function Home({
                     <button
                       type="button"
                       disabled={signingOut}
-                      onClick={() => void handleLogout()}
+                      onClick={handleLogout}
                       style={{
                         width: "100%",
                         textAlign: "left",
@@ -439,11 +444,11 @@ function Home({
                         borderRadius: 8,
                         padding: "10px 8px",
                         fontWeight: 600,
-                        cursor: signingOut ? "wait" : "pointer",
+                        cursor: signingOut ? "default" : "pointer",
                         opacity: signingOut ? 0.65 : 1,
                       }}
                     >
-                      {signingOut ? "Signing out..." : "🚪 Logout"}
+                      🚪 Logout
                     </button>
                   </div>
                 ) : null}

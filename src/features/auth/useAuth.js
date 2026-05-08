@@ -16,6 +16,8 @@ function mapUser(session, plan = "free") {
 
 /** Ensures INITIAL_SESSION/PKCE never leaves the app stuck in loading=false with no user while URL exchange runs. */
 const SESSION_FALLBACK_MS = 400;
+/** Global signOut() can hang on some networks/browsers — we always finish with local cleanup. */
+const SIGN_OUT_TIMEOUT_MS = 8000;
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -117,8 +119,20 @@ export function useAuth() {
   async function signOut() {
     setSigningOut(true);
     try {
-      await supabase.auth.signOut();
+      await Promise.race([
+        supabase.auth.signOut({ scope: "global" }),
+        new Promise((resolve) => window.setTimeout(resolve, SIGN_OUT_TIMEOUT_MS)),
+      ]);
+    } catch {
+      /* remote sign-out failed — continue with local cleanup */
     } finally {
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        /* ignore */
+      }
+      setSession(null);
+      setPlan("free");
       setSigningOut(false);
     }
   }
