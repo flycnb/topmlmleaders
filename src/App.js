@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./App.css";
 import Home from "./pages/Home";
 import MemberProfile from "./features/profile";
+import Dashboard from "./features/dashboard";
 import AuthModal from "./features/auth";
 import ChatModal from "./components/ChatModal";
 import { useAuth } from "./features/auth/useAuth";
@@ -75,14 +76,25 @@ function App() {
 
   if (currentScreen === "dashboard") {
     return (
-      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", textAlign: "center", padding: 20 }}>
-        <div>
-          <h2>Dashboard Screen</h2>
-          <button type="button" onClick={() => setCurrentScreen("home")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "10px 16px", cursor: "pointer" }}>
-            Back to Home
-          </button>
-        </div>
-      </main>
+      <>
+        <Dashboard
+          user={user}
+          onBack={() => setCurrentScreen("home")}
+          onOpenChat={openChat}
+          onOpenProfile={(member) => {
+            setSelectedMember(member);
+            setCurrentScreen("profile");
+          }}
+          onSignOut={signOut}
+        />
+        <AuthModal
+          open={showAuth}
+          onClose={() => setShowAuth(false)}
+          signInWithGoogle={signInWithGoogle}
+          loading={loading}
+        />
+        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
+      </>
     );
   }
 

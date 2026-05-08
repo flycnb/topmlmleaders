@@ -4,7 +4,7 @@ Last updated: May 2026
 
 ---
 
-## CURRENT PHASE: 2 — Home Page + Search + Member Cards
+## CURRENT PHASE: 6 — Member Dashboard
 
 ---
 
@@ -133,18 +133,18 @@ Tasks:
 
 ## PHASE 6 — Member Dashboard
 **Goal:** Complete member control panel
-**Status:** 🔲 Todo
+**Status:** 🟡 In Progress
 
 Tasks:
-- [ ] Stats row (Followers, Messages, Bookmarks, Alerts) — clickable
-- [ ] Overview tab (activity feed, profile summary)
-- [ ] Profile tab (edit all fields, upload photo, YouTube, QR)
-- [ ] Messages tab (conversation list)
-- [ ] Bookmarks tab (search + list + remove)
-- [ ] Bookings tab (incoming + outgoing)
-- [ ] Settings tab (verify badge, upgrade plan)
-- [ ] Refer & Earn tab
-- [ ] All data from real Supabase — no fake data
+- [x] Stats row (Followers, Messages, Bookmarks, Alerts) — clickable
+- [x] Overview tab (activity feed, profile summary)
+- [x] Profile tab (edit all fields, upload photo, YouTube, QR)
+- [x] Messages tab (conversation list)
+- [x] Bookmarks tab (search + list + remove)
+- [x] Bookings tab (incoming + outgoing)
+- [x] Settings tab (verify badge, upgrade plan)
+- [x] Refer & Earn tab
+- [x] All data from real Supabase — no fake data
 
 **Acceptance:**
 1. Stats show real numbers
