@@ -22,6 +22,11 @@ Last updated: May 2026
 - **Reported:** May 2026
 - **Actual:** Profile page shows error after login.
 
+### BUG-004 — Logout button intermittent in Safari
+- **Reported:** May 2026
+- **Actual:** Logout button sometimes works and sometimes does not in Safari.
+- **Notes:** Likely same root cause as BUG-001 Chrome logout issue.
+
 ---
 
 ## 🟡 IN PROGRESS
