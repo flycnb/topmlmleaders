@@ -5,7 +5,6 @@ const ITEMS = [
   { key: "top", label: "Top", icon: "🏆" },
   { key: "board", label: "Board", icon: "📋" },
   { key: "plans", label: "Plans", icon: "💎" },
-  { key: "me", label: "Me", icon: "👤" },
 ];
 
 function BottomNav({ activeTab, onChange }) {
@@ -21,7 +20,7 @@ function BottomNav({ activeTab, onChange }) {
         borderTop: "1px solid var(--color-border)",
         background: "#FFFFFF",
         display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)",
+        gridTemplateColumns: "repeat(4, 1fr)",
         paddingTop: 8,
       }}
     >

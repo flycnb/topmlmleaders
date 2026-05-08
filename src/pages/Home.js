@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
 import BottomNav from "../components/BottomNav";
@@ -58,6 +58,8 @@ function Home({
   const [visibleCount, setVisibleCount] = useState(12);
   const [columns, setColumns] = useState(1);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -147,6 +149,20 @@ function Home({
   useEffect(() => {
     setVisibleCount(12);
   }, [searchTerm, activeFilter, locationFilter]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    }
+    if (showUserMenu) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [showUserMenu]);
 
   function handleFollow(memberId) {
     const member = members.find((item) => item.id === memberId);
@@ -273,46 +289,38 @@ function Home({
     return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 110px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
   }
 
-  function renderMeTab() {
-    if (!user) {
-      return (
-        <section style={{ minHeight: "60vh", padding: "40px 16px 110px", textAlign: "center" }}>
-          <div style={{ fontSize: 64 }}>👤</div>
-          <h2 style={{ margin: "10px 0 6px" }}>Join TopMLMLeaders</h2>
-          <button type="button" onClick={onAuthRequired} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "13px 16px", cursor: "pointer" }}>
-            Login with Google
-          </button>
-        </section>
-      );
-    }
-    return (
-      <section style={{ minHeight: "60vh", padding: "40px 16px 24px", textAlign: "center" }}>
-        <div style={{ margin: "0 auto", width: 72, height: 72 }}><div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #6C63FF, #4338CA)", color: "#FFFFFF", fontWeight: 800, display: "grid", placeItems: "center", fontSize: 24 }}>{String(user?.name || "M").slice(0, 1)}</div></div>
-        <h3 style={{ marginBottom: 4 }}>{user?.name}</h3>
-        <p style={{ marginTop: 0, color: "var(--color-muted)" }}>{user?.email}</p>
-        <button type="button" onClick={onOpenDashboard} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "12px 16px", cursor: "pointer", marginBottom: 10 }}>
-          Open Dashboard
-        </button>
-        <button type="button" onClick={onSignOut} style={{ width: "100%", maxWidth: 360, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "12px 16px", cursor: "pointer" }}>
-          Logout
-        </button>
-      </section>
-    );
-  }
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
       <header style={{ position: "sticky", top: 0, zIndex: 40, background: "#FFFFFF", borderBottom: "1px solid var(--color-border)", padding: "10px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("directory");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            style={{ border: "none", background: "transparent", textAlign: "left", cursor: "pointer", padding: 0 }}
+          >
             <div style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: 20 }}>🌐 TopMLMLeaders</div>
             <div style={{ fontSize: 12, color: "var(--color-muted)" }}>AI Powered Search · Connect · Grow Worldwide</div>
-          </div>
+          </button>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>🔔 {unreadCount}</button>
             <button type="button" style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>💎 Plans</button>
             {user ? (
-              <button type="button" onClick={() => setActiveTab("me")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>👤 {String(user?.name || "Me").split(" ")[0]}</button>
+              <div ref={userMenuRef} style={{ position: "relative" }}>
+                <button type="button" onClick={() => setShowUserMenu((prev) => !prev)} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>👤 {String(user?.name || "Me").split(" ")[0]}</button>
+                {showUserMenu ? (
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 190, background: "#FFFFFF", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 28px rgba(0,0,0,0.12)", padding: 8, zIndex: 60 }}>
+                    <button type="button" onClick={() => { setShowUserMenu(false); onOpenDashboard(); }} style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 8, padding: "10px 8px", fontWeight: 600, cursor: "pointer" }}>
+                      👤 Open Dashboard
+                    </button>
+                    <button type="button" onClick={() => { setShowUserMenu(false); onSignOut(); }} style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 8, padding: "10px 8px", fontWeight: 600, cursor: "pointer" }}>
+                      🚪 Logout
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <button type="button" onClick={onAuthRequired} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>Login</button>
             )}
@@ -323,8 +331,7 @@ function Home({
       {activeTab === "top" && renderPlaceholder("🏆 Leaderboard coming soon")}
       {activeTab === "board" && renderPlaceholder("📋 Opportunity Board coming soon")}
       {activeTab === "plans" && renderPlaceholder("💎 Plans coming soon")}
-      {activeTab === "me" && renderMeTab()}
-      {!(activeTab === "me" && user) ? <BottomNav activeTab={activeTab} onChange={setActiveTab} /> : null}
+      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
     </div>
   );
 }
