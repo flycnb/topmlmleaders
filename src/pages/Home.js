@@ -287,7 +287,7 @@ function Home({
     return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 24px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
   }
 
-  const sessionBusy = Boolean(loadingAuth && !user);
+  const sessionBusy = false;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg)", position: "relative" }}>
