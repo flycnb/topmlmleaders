@@ -276,7 +276,7 @@ function Home({
   function renderMeTab() {
     if (!user) {
       return (
-        <section style={{ minHeight: "60vh", padding: "40px 16px calc(120px + env(safe-area-inset-bottom))", textAlign: "center" }}>
+        <section style={{ minHeight: "60vh", padding: "40px 16px 110px", textAlign: "center" }}>
           <div style={{ fontSize: 64 }}>👤</div>
           <h2 style={{ margin: "10px 0 6px" }}>Join TopMLMLeaders</h2>
           <button type="button" onClick={onAuthRequired} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "13px 16px", cursor: "pointer" }}>
@@ -286,7 +286,7 @@ function Home({
       );
     }
     return (
-      <section style={{ minHeight: "60vh", padding: "40px 16px calc(120px + env(safe-area-inset-bottom))", textAlign: "center" }}>
+      <section style={{ minHeight: "60vh", padding: "40px 16px 24px", textAlign: "center" }}>
         <div style={{ margin: "0 auto", width: 72, height: 72 }}><div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #6C63FF, #4338CA)", color: "#FFFFFF", fontWeight: 800, display: "grid", placeItems: "center", fontSize: 24 }}>{String(user?.name || "M").slice(0, 1)}</div></div>
         <h3 style={{ marginBottom: 4 }}>{user?.name}</h3>
         <p style={{ marginTop: 0, color: "var(--color-muted)" }}>{user?.email}</p>
@@ -324,7 +324,7 @@ function Home({
       {activeTab === "board" && renderPlaceholder("📋 Opportunity Board coming soon")}
       {activeTab === "plans" && renderPlaceholder("💎 Plans coming soon")}
       {activeTab === "me" && renderMeTab()}
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+      {!(activeTab === "me" && user) ? <BottomNav activeTab={activeTab} onChange={setActiveTab} /> : null}
     </div>
   );
 }
