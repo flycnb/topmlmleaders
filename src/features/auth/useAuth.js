@@ -49,6 +49,9 @@ export function useAuth() {
 
       if (event === "SIGNED_IN") {
         applySessionAndFinishBootstrap(nextSession);
+        if (window.location.search.includes("code=")) {
+          window.location.replace("/");
+        }
         const nextUser = nextSession?.user;
         if (nextUser?.id) {
           const email = nextUser.email || "";
