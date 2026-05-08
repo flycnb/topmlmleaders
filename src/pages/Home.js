@@ -37,7 +37,7 @@ function SkeletonCard({ id }) {
   );
 }
 
-function Home({ onOpenDashboard }) {
+function Home({ onOpenDashboard, onOpenProfile }) {
   const [activeTab, setActiveTab] = useState("directory");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -79,7 +79,14 @@ function Home({ onOpenDashboard }) {
       if (error || !data?.length) {
         setMembers(sortMembers(FALLBACK_MEMBERS));
       } else {
-        setMembers(sortMembers(mapMembers(data)));
+        const mapped = mapMembers(data).map((member, index) => ({
+          ...member,
+          socialFb: Boolean(data[index]?.social_fb),
+          socialIg: Boolean(data[index]?.social_ig),
+          socialYt: Boolean(data[index]?.social_yt),
+          socialLi: Boolean(data[index]?.social_li),
+        }));
+        setMembers(sortMembers(mapped));
       }
       setIsLoading(false);
     }
@@ -231,7 +238,7 @@ function Home({ onOpenDashboard }) {
                     isFollowing={Boolean(followingMap[member.id])}
                     onFollow={handleFollow}
                     onBlockedAction={openModal}
-                    onViewProfile={() => openModal("Profile page will be available in Phase 3.")}
+                    onViewProfile={() => onOpenProfile(member)}
                   />
                 ))}
               </div>

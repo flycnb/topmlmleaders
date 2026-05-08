@@ -56,7 +56,7 @@ Tasks:
 
 ## PHASE 3 — Member Profile Page (Personal Website)
 **Goal:** World class member profile that works as their personal website
-**Status:** 🔲 Todo
+**Status:** 🟡 In Progress
 
 Tasks:
 - [ ] Profile header (cover, avatar, stats, follow button)

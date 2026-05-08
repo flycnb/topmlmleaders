@@ -1,12 +1,22 @@
 import React, { useState } from "react";
 import "./App.css";
 import Home from "./pages/Home";
+import MemberProfile from "./features/profile";
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState("home");
+  const [selectedMember, setSelectedMember] = useState(null);
 
   if (currentScreen === "home") {
-    return <Home onOpenDashboard={() => setCurrentScreen("dashboard")} />;
+    return (
+      <Home
+        onOpenDashboard={() => setCurrentScreen("dashboard")}
+        onOpenProfile={(member) => {
+          setSelectedMember(member);
+          setCurrentScreen("profile");
+        }}
+      />
+    );
   }
 
   if (currentScreen === "dashboard") {
@@ -23,7 +33,14 @@ function App() {
   }
 
   if (currentScreen === "profile") {
-    return <main style={{ padding: 24 }}>Profile Screen</main>;
+    return (
+      <MemberProfile
+        member={selectedMember}
+        onBack={() => {
+          setCurrentScreen("home");
+        }}
+      />
+    );
   }
 
   return <main style={{ padding: 24 }}>Admin Screen</main>;
