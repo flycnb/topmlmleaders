@@ -18,7 +18,7 @@ function card(title, body) {
   );
 }
 
-function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow, onBack }) {
+function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow, onOpenChat, onBack }) {
   const [liveMember, setLiveMember] = useState(member || {});
   const [activeTab, setActiveTab] = useState("about");
   const [showShare, setShowShare] = useState(false);
@@ -258,7 +258,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       </section>
       <main style={{ padding: "12px 16px 110px" }}>{renderContent()}</main>
       <footer style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30, borderTop: "1px solid var(--color-border)", background: "#FFFFFF", display: "flex", gap: 8, padding: "10px 12px calc(10px + var(--safe-bottom))" }}>
-        <button type="button" onClick={() => (user ? null : onAuthRequired())} style={{ flex: 1, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-muted)", fontWeight: 700, padding: "12px 10px" }}>💬 Message</button>
+        <button type="button" onClick={() => onOpenChat(liveMember)} style={{ flex: 1, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-muted)", fontWeight: 700, padding: "12px 10px" }}>💬 Message</button>
         <button type="button" onClick={() => setActiveTab(liveMember.plan === "elite" ? "book" : "join us")} style={{ flex: 2, borderRadius: 999, border: "none", background: color, color: "#FFFFFF", fontWeight: 800, padding: "12px 10px" }}>
           {liveMember.plan === "elite" ? "📅 Book Appointment" : "🎯 Join My Team"}
         </button>

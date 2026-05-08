@@ -109,7 +109,7 @@ Tasks:
 
 ## PHASE 5 — Chat + Notifications
 **Goal:** WhatsApp-style realtime chat + notifications
-**Status:** 🔲 Todo
+**Status:** 🟡 In Progress
 
 Tasks:
 - [ ] Chat modal (WhatsApp style)

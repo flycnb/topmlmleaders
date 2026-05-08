@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
 import { applyMemberSearch, mapMembers, SEARCH_FILTERS } from "../features/search";
+import { useNotifications } from "../features/notifications/useNotifications";
 
 const FALLBACK_MEMBERS = [
   { id: "f-1", name: "Rajnish Kumar", city: "Mumbai", country: "India", company: "Herbalife", role: "Diamond Leader", plan: "elite", yearsExp: 15, followerCount: 1240, color: "#6C63FF", initials: "RK", rating: 4.9, reviews: 124, wa: "919876500001", waVisibility: "public", verified: true, slots: 3 },
@@ -45,6 +46,7 @@ function Home({
   isBookmarked,
   toggleBookmark,
   onFlagMember,
+  onOpenChat,
   onOpenDashboard,
   onOpenProfile,
 }) {
@@ -56,29 +58,28 @@ function Home({
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(12);
   const [columns, setColumns] = useState(1);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
+  const notifRef = useRef(null);
+  const {
+    notifications,
+    unreadCount,
+    markAllRead,
+    markOneRead,
+    loading: notificationsLoading,
+  } = useNotifications(user);
 
-  useEffect(() => {
-    let active = true;
-    async function loadUnread() {
-      if (!user?.id) {
-        setUnreadCount(0);
-        return;
-      }
-      const { count } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("read", false);
-      if (active) setUnreadCount(count || 0);
-    }
-    loadUnread();
-    return () => {
-      active = false;
-    };
-  }, [user?.id]);
+  function timeAgo(value) {
+    const timestamp = new Date(value).getTime();
+    const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+    if (diffMinutes < 1) return "Just now";
+    if (diffMinutes < 60) return `${diffMinutes} mins ago`;
+    const hours = Math.floor(diffMinutes / 60);
+    if (hours < 24) return `${hours} hrs ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} days ago`;
+  }
 
   useEffect(() => {
     let canceled = false;
@@ -154,14 +155,17 @@ function Home({
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
     }
-    if (showUserMenu) {
+    if (showUserMenu || showNotifications) {
       document.addEventListener("mousedown", handleOutsideClick);
     }
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
-  }, [showUserMenu]);
+  }, [showUserMenu, showNotifications]);
 
   function handleFollow(memberId) {
     const member = members.find((item) => item.id === memberId);
@@ -263,6 +267,9 @@ function Home({
                       <button type="button" onClick={() => toggleBookmark(member)} style={{ flex: 1, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", padding: "8px 10px", fontWeight: 700, cursor: "pointer" }}>
                         {isBookmarked(member.id) ? "🔖 Bookmarked" : "🔖 Bookmark"}
                       </button>
+                      <button type="button" onClick={() => onOpenChat(member)} style={{ borderRadius: 999, border: "1px solid #DBEAFE", background: "#FFFFFF", color: "#1D4ED8", padding: "8px 12px", fontWeight: 700, cursor: "pointer" }}>
+                        ✉️ Chat
+                      </button>
                       <button type="button" onClick={() => (user ? onFlagMember(member) : onAuthRequired())} style={{ borderRadius: 999, border: "1px solid #FECACA", background: "#FFFFFF", color: "#DC2626", padding: "8px 12px", fontWeight: 700, cursor: "pointer" }}>
                         🚩 Flag
                       </button>
@@ -314,9 +321,77 @@ function Home({
               💎 Plans
             </button>
             {user ? (
-              <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>
-                🔔 {unreadCount}
-              </button>
+              <div ref={notifRef} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((prev) => !prev)}
+                  style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}
+                >
+                  🔔 {unreadCount}
+                </button>
+                {showNotifications ? (
+                  <div
+                    className="fade-in"
+                    style={{
+                      position: "fixed",
+                      top: 76,
+                      right: 16,
+                      width: "min(360px, calc(100vw - 32px))",
+                      maxHeight: "70vh",
+                      overflowY: "auto",
+                      background: "#FFFFFF",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 14,
+                      boxShadow: "0 12px 28px rgba(0,0,0,0.12)",
+                      zIndex: 80,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 12px 8px" }}>
+                      <strong>Notifications</strong>
+                      <button
+                        type="button"
+                        onClick={markAllRead}
+                        style={{ border: "none", background: "transparent", color: "var(--color-primary)", fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+                    <div style={{ padding: 10, display: "grid", gap: 8 }}>
+                      {notificationsLoading ? (
+                        <div style={{ color: "var(--color-muted)", textAlign: "center", padding: 10 }}>Loading...</div>
+                      ) : notifications.length === 0 ? (
+                        <div style={{ color: "var(--color-muted)", textAlign: "center", padding: 14 }}>No notifications yet</div>
+                      ) : (
+                        notifications.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={async () => {
+                              await markOneRead(item.id);
+                              setShowNotifications(false);
+                            }}
+                            style={{
+                              textAlign: "left",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 10,
+                              background: item.read ? "#FFFFFF" : "#F5F3FF",
+                              padding: 10,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div style={{ fontWeight: 600 }}>
+                              {item.type === "message" ? "💬" : "👥"} {item.text}
+                            </div>
+                            <div style={{ marginTop: 4, fontSize: 12, color: "var(--color-muted)" }}>
+                              {timeAgo(item.created_at)}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {user ? (
               <div ref={userMenuRef} style={{ position: "relative" }}>

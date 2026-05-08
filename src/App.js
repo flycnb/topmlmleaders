@@ -3,6 +3,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import MemberProfile from "./features/profile";
 import AuthModal from "./features/auth";
+import ChatModal from "./components/ChatModal";
 import { useAuth } from "./features/auth/useAuth";
 import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
@@ -13,12 +14,25 @@ function App() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [flagMember, setFlagMember] = useState(null);
+  const [chatMember, setChatMember] = useState(null);
   const { user, loading, signInWithGoogle, signOut } = useAuth();
   const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
   const { isBookmarked, toggleBookmark } = useBookmarks(user, () => setShowAuth(true));
 
   function onAuthRequired() {
     setShowAuth(true);
+  }
+
+  function openChat(member) {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+    setChatMember(member || null);
+  }
+
+  function closeChat() {
+    setChatMember(null);
   }
 
   if (currentScreen === "home") {
@@ -34,6 +48,7 @@ function App() {
           isBookmarked={isBookmarked}
           toggleBookmark={toggleBookmark}
           onFlagMember={setFlagMember}
+          onOpenChat={openChat}
           onOpenDashboard={() => setCurrentScreen("dashboard")}
           onOpenProfile={(member) => {
             setSelectedMember(member);
@@ -53,6 +68,7 @@ function App() {
           member={flagMember}
           onAuthRequired={onAuthRequired}
         />
+        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
       </>
     );
   }
@@ -79,6 +95,7 @@ function App() {
           onAuthRequired={onAuthRequired}
           isFollowing={isFollowing}
           toggleFollow={toggleFollow}
+          onOpenChat={openChat}
           onBack={() => setCurrentScreen("home")}
         />
         <AuthModal
@@ -87,6 +104,7 @@ function App() {
           signInWithGoogle={signInWithGoogle}
           loading={loading}
         />
+        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
       </>
     );
   }
