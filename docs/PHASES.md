@@ -10,18 +10,18 @@ Last updated: May 2026
 
 ## PHASE 1 — Project Setup & Structure
 **Goal:** Clean folder structure, rules, base files
-**Status:** 🔲 Todo
+**Status:** ✅ Complete
 
 Tasks:
-- [ ] Create folder structure
-- [ ] Create .cursor-rules
-- [ ] Create docs/ files
-- [ ] Setup src/lib/supabaseClient.js with PKCE
-- [ ] Setup public/index.html with Inter font + safe area
-- [ ] Setup src/index.css with reset + CSS variables
-- [ ] Setup src/App.css with animations
-- [ ] Create empty FEATURE.md in each feature folder
-- [ ] npm run build passes
+- [x] Create folder structure
+- [x] Create .cursor-rules
+- [x] Create docs/ files
+- [x] Setup src/lib/supabaseClient.js with PKCE
+- [x] Setup public/index.html with Inter font + safe area
+- [x] Setup src/index.css with reset + CSS variables
+- [x] Setup src/App.css with animations
+- [x] Create empty FEATURE.md in each feature folder
+- [x] npm run build passes
 
 **Acceptance:** Build passes, folder structure correct, no old code remaining.
 
@@ -229,4 +229,4 @@ Tasks:
 ---
 
 ## COMPLETED PHASES
-None yet — fresh start!
+- Phase 1 — Project Setup & Structure
