@@ -15,7 +15,11 @@ function MemberCard({
   member,
   isLoggedIn,
   isFollowing,
+  isBookmarked,
   onFollow,
+  onBookmark,
+  onFlag,
+  onChat,
   onBlockedAction,
   onViewProfile,
 }) {
@@ -126,18 +130,38 @@ function MemberCard({
         </div>
 
         <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 10, paddingTop: 10 }}>
-          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
             <button
               type="button"
               onClick={openWhatsapp}
-              style={{ flex: 1, borderRadius: 12, border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", fontWeight: 700, padding: "9px 8px", cursor: "pointer" }}
+              style={{ borderRadius: 10, border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
               💬 WA
             </button>
             <button
               type="button"
-              onClick={() => (isLoggedIn ? null : onBlockedAction("Login to start chat."))}
-              style={{ flex: 1, borderRadius: 12, border: "1px solid #DBEAFE", background: "#EFF6FF", color: "#2563EB", fontWeight: 700, padding: "9px 8px", cursor: "pointer" }}
+              onClick={() => onBookmark(member)}
+              style={{ borderRadius: 10, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
+            >
+              {isBookmarked ? "🔖 Saved" : "🔖 Bookmark"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onFlag(member)}
+              style={{ borderRadius: 10, border: "1px solid #FECACA", background: "#FFFFFF", color: "#DC2626", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
+            >
+              🚩 Flag
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!isLoggedIn) {
+                  onBlockedAction("Login to start chat.");
+                  return;
+                }
+                onChat(member);
+              }}
+              style={{ borderRadius: 10, border: "1px solid #DBEAFE", background: "#EFF6FF", color: "#2563EB", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
               ✉️ Chat
             </button>

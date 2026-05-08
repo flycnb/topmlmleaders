@@ -259,51 +259,14 @@ function Home({
                       member={member}
                       isLoggedIn={Boolean(user)}
                       isFollowing={isFollowing(member.id)}
+                      isBookmarked={isBookmarked(member.id)}
                       onFollow={handleFollow}
+                      onBookmark={() => toggleBookmark(member)}
+                      onFlag={() => (user ? onFlagMember(member) : onAuthRequired())}
+                      onChat={() => onOpenChat(member)}
                       onBlockedAction={onAuthRequired}
                       onViewProfile={() => onOpenProfile(member)}
                     />
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!member.wa) return;
-                          if (!user && member.waVisibility && member.waVisibility !== "public") {
-                            onAuthRequired();
-                            return;
-                          }
-                          window.open(
-                            `https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`,
-                            "_blank",
-                            "noopener"
-                          );
-                        }}
-                        style={{ borderRadius: 10, border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", padding: "8px 6px", fontWeight: 700, cursor: "pointer" }}
-                      >
-                        💬 WA
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleBookmark(member)}
-                        style={{ borderRadius: 10, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", padding: "8px 6px", fontWeight: 700, cursor: "pointer" }}
-                      >
-                        {isBookmarked(member.id) ? "🔖 Saved" : "🔖 Bookmark"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => (user ? onFlagMember(member) : onAuthRequired())}
-                        style={{ borderRadius: 10, border: "1px solid #FECACA", background: "#FFFFFF", color: "#DC2626", padding: "8px 6px", fontWeight: 700, cursor: "pointer" }}
-                      >
-                        🚩 Flag
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenChat(member)}
-                        style={{ borderRadius: 10, border: "1px solid #DBEAFE", background: "#EFF6FF", color: "#1D4ED8", padding: "8px 6px", fontWeight: 700, cursor: "pointer" }}
-                      >
-                        ✉️ Chat
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
