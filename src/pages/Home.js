@@ -96,24 +96,27 @@ function Home({
     let canceled = false;
     async function loadMembers() {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from("members")
-        .select("*")
-        .order("follower_count", { ascending: false, nullsFirst: false });
-      if (canceled) return;
-      if (error || !data?.length) {
-        setMembers(sortMembers(FALLBACK_MEMBERS));
-      } else {
-        const mapped = mapMembers(data).map((member, index) => ({
-          ...member,
-          socialFb: Boolean(data[index]?.social_fb),
-          socialIg: Boolean(data[index]?.social_ig),
-          socialYt: Boolean(data[index]?.social_yt),
-          socialLi: Boolean(data[index]?.social_li),
-        }));
-        setMembers(sortMembers(mapped));
+      try {
+        const { data, error } = await supabase
+          .from("members")
+          .select("*")
+          .order("follower_count", { ascending: false, nullsFirst: false });
+        if (canceled) return;
+        if (error || !data?.length) {
+          setMembers(sortMembers(FALLBACK_MEMBERS));
+        } else {
+          const mapped = mapMembers(data).map((member, index) => ({
+            ...member,
+            socialFb: Boolean(data[index]?.social_fb),
+            socialIg: Boolean(data[index]?.social_ig),
+            socialYt: Boolean(data[index]?.social_yt),
+            socialLi: Boolean(data[index]?.social_li),
+          }));
+          setMembers(sortMembers(mapped));
+        }
+      } finally {
+        if (!canceled) setIsLoading(false);
       }
-      setIsLoading(false);
     }
     loadMembers();
     return () => {
