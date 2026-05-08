@@ -314,7 +314,7 @@ function Home({
             <button type="button" onClick={() => setActiveTab("plans")} style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
               💎 Plans
             </button>
-            {user?.email === "admin@topmlmleaders.com" ? (
+            {user?.email === "digidreamltd@gmail.com" ? (
               <button type="button" onClick={onOpenAdmin} style={{ border: "none", borderRadius: 999, background: "#EF4444", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
                 ⚡ Admin
               </button>

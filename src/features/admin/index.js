@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
-const ADMIN_EMAIL = "admin@topmlmleaders.com";
+const ADMIN_EMAIL = "digidreamltd@gmail.com";
 const TABS = ["dashboard", "members", "flags", "broadcast", "coupons", "ai settings"];
 
 function timeAgo(value) {
