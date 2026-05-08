@@ -57,7 +57,6 @@ function Home({
   const [activeTab, setActiveTab] = useState("directory");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState(null);
   const [members, setMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(12);
@@ -123,15 +122,6 @@ function Home({
   }, []);
 
   useEffect(() => {
-    fetch("https://ipapi.co/json/")
-      .then((response) => response.json())
-      .then((data) => {
-        if (data?.city && data?.country_name) setLocationFilter({ city: data.city, country: data.country_name });
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
     function onResize() {
       if (window.innerWidth >= 1200) setColumns(3);
       else if (window.innerWidth >= 768) setColumns(2);
@@ -143,8 +133,8 @@ function Home({
   }, []);
 
   const filteredMembers = useMemo(
-    () => applyMemberSearch(members, searchTerm, activeFilter, locationFilter),
-    [members, searchTerm, activeFilter, locationFilter]
+    () => applyMemberSearch(members, searchTerm, activeFilter, null),
+    [members, searchTerm, activeFilter]
   );
   const visibleMembers = useMemo(() => filteredMembers.slice(0, visibleCount), [filteredMembers, visibleCount]);
 
@@ -160,7 +150,7 @@ function Home({
 
   useEffect(() => {
     setVisibleCount(12);
-  }, [searchTerm, activeFilter, locationFilter]);
+  }, [searchTerm, activeFilter]);
 
   useEffect(() => {
     function handleOutsideClick(event) {
@@ -234,11 +224,6 @@ function Home({
                 </button>
               );
             })}
-            {locationFilter ? (
-              <button type="button" onClick={() => setLocationFilter(null)} style={{ borderRadius: 999, border: "none", background: "#FFFFFF", color: "#111827", fontWeight: 700, padding: "7px 12px", whiteSpace: "nowrap", cursor: "pointer" }}>
-                📍 {locationFilter.city}, {locationFilter.country} ×
-              </button>
-            ) : null}
           </div>
         </section>
 
