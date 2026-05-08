@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
-import BottomNav from "../components/BottomNav";
 import { applyMemberSearch, mapMembers, SEARCH_FILTERS } from "../features/search";
 
 const FALLBACK_MEMBERS = [
@@ -227,7 +226,7 @@ function Home({
           </div>
         </section>
 
-        <section style={{ padding: "18px 16px 110px" }}>
+        <section style={{ padding: "18px 16px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <strong style={{ fontSize: 15, color: "var(--color-text)" }}>{filteredMembers.length} leaders found</strong>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Elite first → by followers</span>
@@ -286,7 +285,7 @@ function Home({
   }
 
   function renderPlaceholder(text) {
-    return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 110px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
+    return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 24px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
   }
 
   return (
@@ -304,9 +303,21 @@ function Home({
             <div style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: 20 }}>🌐 TopMLMLeaders</div>
             <div style={{ fontSize: 12, color: "var(--color-muted)" }}>AI Powered Search · Connect · Grow Worldwide</div>
           </button>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>🔔 {unreadCount}</button>
-            <button type="button" style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>💎 Plans</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button type="button" onClick={() => setActiveTab("top")} style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-text)", fontWeight: 700, cursor: "pointer" }}>
+              🏆 Top
+            </button>
+            <button type="button" onClick={() => setActiveTab("board")} style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-text)", fontWeight: 700, cursor: "pointer" }}>
+              📋 Board
+            </button>
+            <button type="button" onClick={() => setActiveTab("plans")} style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
+              💎 Plans
+            </button>
+            {user ? (
+              <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>
+                🔔 {unreadCount}
+              </button>
+            ) : null}
             {user ? (
               <div ref={userMenuRef} style={{ position: "relative" }}>
                 <button type="button" onClick={() => setShowUserMenu((prev) => !prev)} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>👤 {String(user?.name || "Me").split(" ")[0]}</button>
@@ -331,7 +342,6 @@ function Home({
       {activeTab === "top" && renderPlaceholder("🏆 Leaderboard coming soon")}
       {activeTab === "board" && renderPlaceholder("📋 Opportunity Board coming soon")}
       {activeTab === "plans" && renderPlaceholder("💎 Plans coming soon")}
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
     </div>
   );
 }
