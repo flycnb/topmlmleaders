@@ -14,7 +14,13 @@ Last updated: May 2026
 ---
 
 ## 🔴 ACTIVE BUGS
-None yet — fresh build starting
+### BUG-001 — Logout button intermittent
+- **Reported:** May 2026
+- **Actual:** Logout button is sometimes not clickable.
+
+### BUG-002 — Profile page not loading after login
+- **Reported:** May 2026
+- **Actual:** Profile page shows error after login.
 
 ---
 
