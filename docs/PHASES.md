@@ -4,7 +4,7 @@ Last updated: May 2026
 
 ---
 
-## CURRENT PHASE: 1 — Project Setup
+## CURRENT PHASE: 2 — Home Page + Search + Member Cards
 
 ---
 
@@ -29,7 +29,7 @@ Tasks:
 
 ## PHASE 2 — Home Page + Search + Member Cards
 **Goal:** World class home page with master search and beautiful member cards
-**Status:** 🔲 Todo
+**Status:** 🟡 In Progress
 
 Tasks:
 - [ ] Home page layout (header, search, grid, bottom nav)

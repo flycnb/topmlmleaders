@@ -1,5 +1,5 @@
 # Feature: Search
-Status: Todo
-Files: src/features/search/index.js, src/features/search/SearchBox.js
+Status: In Progress
+Files: src/features/search/index.js, src/pages/Home.js, src/components/MemberCard.js
 Database: members table
-Notes: Single master search box, AI assistant integration
+Notes: Master search + filter chips + location chip + infinite scroll now live on Home. AI assistant button placeholder added.
