@@ -37,7 +37,18 @@ function SkeletonCard({ id }) {
   );
 }
 
-function Home({ onOpenDashboard, onOpenProfile }) {
+function Home({
+  user,
+  onSignOut,
+  onAuthRequired,
+  isFollowing,
+  toggleFollow,
+  isBookmarked,
+  toggleBookmark,
+  onFlagMember,
+  onOpenDashboard,
+  onOpenProfile,
+}) {
   const [activeTab, setActiveTab] = useState("directory");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -45,27 +56,28 @@ function Home({ onOpenDashboard, onOpenProfile }) {
   const [members, setMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(12);
-  const [followingMap, setFollowingMap] = useState({});
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMessage, setAuthMessage] = useState("Login required.");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [me, setMe] = useState(null);
   const [columns, setColumns] = useState(1);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!isMounted) return;
-      const user = data?.session?.user || null;
-      setIsLoggedIn(Boolean(user));
-      if (user) {
-        setMe({ name: user.user_metadata?.full_name || "Member", email: user.email || "", plan: "free" });
+    let active = true;
+    async function loadUnread() {
+      if (!user?.id) {
+        setUnreadCount(0);
+        return;
       }
-    });
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+      if (active) setUnreadCount(count || 0);
+    }
+    loadUnread();
     return () => {
-      isMounted = false;
+      active = false;
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     let canceled = false;
@@ -120,7 +132,6 @@ function Home({ onOpenDashboard, onOpenProfile }) {
     () => applyMemberSearch(members, searchTerm, activeFilter, locationFilter),
     [members, searchTerm, activeFilter, locationFilter]
   );
-
   const visibleMembers = useMemo(() => filteredMembers.slice(0, visibleCount), [filteredMembers, visibleCount]);
 
   useEffect(() => {
@@ -137,24 +148,18 @@ function Home({ onOpenDashboard, onOpenProfile }) {
     setVisibleCount(12);
   }, [searchTerm, activeFilter, locationFilter]);
 
-  function openModal(message) {
-    setAuthMessage(message);
-    setShowAuthModal(true);
-  }
-
   function handleFollow(memberId) {
-    if (!isLoggedIn) {
-      openModal("Please login to follow leaders.");
-      return;
-    }
-    setFollowingMap((prev) => ({ ...prev, [memberId]: !prev[memberId] }));
-    setMembers((prev) =>
-      prev.map((member) =>
-        member.id !== memberId
-          ? member
-          : { ...member, followerCount: Math.max(0, member.followerCount + (followingMap[memberId] ? -1 : 1)) }
-      )
-    );
+    const member = members.find((item) => item.id === memberId);
+    if (!member) return;
+    toggleFollow(member, (delta) => {
+      setMembers((prev) =>
+        prev.map((item) =>
+          item.id === memberId
+            ? { ...item, followerCount: Math.max(0, (item.followerCount || 0) + delta) }
+            : item
+        )
+      );
+    });
   }
 
   function renderDirectory() {
@@ -211,7 +216,6 @@ function Home({ onOpenDashboard, onOpenProfile }) {
             <strong style={{ fontSize: 15, color: "var(--color-text)" }}>{filteredMembers.length} leaders found</strong>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Elite first → by followers</span>
           </div>
-
           {isLoading ? (
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 20 }}>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -231,23 +235,29 @@ function Home({ onOpenDashboard, onOpenProfile }) {
             <>
               <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 20 }}>
                 {visibleMembers.map((member) => (
-                  <MemberCard
-                    key={member.id}
-                    member={member}
-                    isLoggedIn={isLoggedIn}
-                    isFollowing={Boolean(followingMap[member.id])}
-                    onFollow={handleFollow}
-                    onBlockedAction={openModal}
-                    onViewProfile={() => onOpenProfile(member)}
-                  />
+                  <div key={member.id} style={{ display: "grid", gap: 8 }}>
+                    <MemberCard
+                      member={member}
+                      isLoggedIn={Boolean(user)}
+                      isFollowing={isFollowing(member.id)}
+                      onFollow={handleFollow}
+                      onBlockedAction={onAuthRequired}
+                      onViewProfile={() => onOpenProfile(member)}
+                    />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={() => toggleBookmark(member)} style={{ flex: 1, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", padding: "8px 10px", fontWeight: 700, cursor: "pointer" }}>
+                        {isBookmarked(member.id) ? "🔖 Bookmarked" : "🔖 Bookmark"}
+                      </button>
+                      <button type="button" onClick={() => (user ? onFlagMember(member) : onAuthRequired())} style={{ borderRadius: 999, border: "1px solid #FECACA", background: "#FFFFFF", color: "#DC2626", padding: "8px 12px", fontWeight: 700, cursor: "pointer" }}>
+                        🚩 Flag
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
               {visibleMembers.length < filteredMembers.length ? (
                 <div style={{ padding: 18, textAlign: "center", color: "var(--color-muted)" }}>
-                  <span className="spinner" style={{ display: "inline-block" }}>
-                    ⏳
-                  </span>{" "}
-                  Loading more leaders...
+                  <span className="spinner" style={{ display: "inline-block" }}>⏳</span> Loading more leaders...
                 </div>
               ) : (
                 <div style={{ padding: 18, textAlign: "center", color: "var(--color-muted)" }}>All leaders loaded</div>
@@ -260,20 +270,16 @@ function Home({ onOpenDashboard, onOpenProfile }) {
   }
 
   function renderPlaceholder(text) {
-    return (
-      <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 110px" }}>
-        <h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2>
-      </section>
-    );
+    return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 110px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
   }
 
   function renderMeTab() {
-    if (!isLoggedIn) {
+    if (!user) {
       return (
         <section style={{ minHeight: "60vh", padding: "40px 16px 110px", textAlign: "center" }}>
           <div style={{ fontSize: 64 }}>👤</div>
           <h2 style={{ margin: "10px 0 6px" }}>Join TopMLMLeaders</h2>
-          <button type="button" onClick={() => openModal("Google login setup will be added in Phase 4.")} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "13px 16px", cursor: "pointer" }}>
+          <button type="button" onClick={onAuthRequired} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "13px 16px", cursor: "pointer" }}>
             Login with Google
           </button>
         </section>
@@ -281,17 +287,13 @@ function Home({ onOpenDashboard, onOpenProfile }) {
     }
     return (
       <section style={{ minHeight: "60vh", padding: "40px 16px 110px", textAlign: "center" }}>
-        <div style={{ margin: "0 auto", width: 72, height: 72 }}>
-          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #6C63FF, #4338CA)", color: "#FFFFFF", fontWeight: 800, display: "grid", placeItems: "center", fontSize: 24 }}>
-            {String(me?.name || "M").slice(0, 1)}
-          </div>
-        </div>
-        <h3 style={{ marginBottom: 4 }}>{me?.name}</h3>
-        <p style={{ marginTop: 0, color: "var(--color-muted)" }}>{me?.email}</p>
+        <div style={{ margin: "0 auto", width: 72, height: 72 }}><div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #6C63FF, #4338CA)", color: "#FFFFFF", fontWeight: 800, display: "grid", placeItems: "center", fontSize: 24 }}>{String(user?.name || "M").slice(0, 1)}</div></div>
+        <h3 style={{ marginBottom: 4 }}>{user?.name}</h3>
+        <p style={{ marginTop: 0, color: "var(--color-muted)" }}>{user?.email}</p>
         <button type="button" onClick={onOpenDashboard} style={{ width: "100%", maxWidth: 360, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "12px 16px", cursor: "pointer", marginBottom: 10 }}>
           Open Dashboard
         </button>
-        <button type="button" onClick={() => { setIsLoggedIn(false); setMe(null); }} style={{ width: "100%", maxWidth: 360, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "12px 16px", cursor: "pointer" }}>
+        <button type="button" onClick={onSignOut} style={{ width: "100%", maxWidth: 360, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "12px 16px", cursor: "pointer" }}>
           Logout
         </button>
       </section>
@@ -307,49 +309,22 @@ function Home({ onOpenDashboard, onOpenProfile }) {
             <div style={{ fontSize: 12, color: "var(--color-muted)" }}>AI Powered Search · Connect · Grow Worldwide</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>
-              🔔 0
-            </button>
-            <button type="button" style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
-              💎 Plans
-            </button>
-            {isLoggedIn ? (
-              <button type="button" onClick={() => setActiveTab("me")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>
-                👤 {String(me?.name || "Me").split(" ")[0]}
-              </button>
+            <button type="button" style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-muted)", fontWeight: 700, cursor: "pointer" }}>🔔 {unreadCount}</button>
+            <button type="button" style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>💎 Plans</button>
+            {user ? (
+              <button type="button" onClick={() => setActiveTab("me")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>👤 {String(user?.name || "Me").split(" ")[0]}</button>
             ) : (
-              <button type="button" onClick={() => openModal("Google login setup will be added in Phase 4.")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>
-                Login
-              </button>
+              <button type="button" onClick={onAuthRequired} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>Login</button>
             )}
           </div>
         </div>
       </header>
-
       {activeTab === "directory" && renderDirectory()}
       {activeTab === "top" && renderPlaceholder("🏆 Leaderboard coming soon")}
       {activeTab === "board" && renderPlaceholder("📋 Opportunity Board coming soon")}
       {activeTab === "plans" && renderPlaceholder("💎 Plans coming soon")}
       {activeTab === "me" && renderMeTab()}
-
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
-
-      {showAuthModal ? (
-        <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(17,24,39,0.55)", display: "grid", placeItems: "center", padding: 18 }}>
-          <div style={{ width: "100%", maxWidth: 420, borderRadius: 20, background: "#FFFFFF", padding: 20 }}>
-            <h3 style={{ marginTop: 0 }}>Auth required</h3>
-            <p style={{ color: "var(--color-muted)", marginBottom: 14 }}>{authMessage}</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setShowAuthModal(false)} style={{ flex: 1, borderRadius: 12, border: "1px solid var(--color-border)", background: "#FFFFFF", padding: "10px 12px", fontWeight: 700, cursor: "pointer" }}>
-                Close
-              </button>
-              <button type="button" onClick={() => { setShowAuthModal(false); setIsLoggedIn(true); setMe({ name: "Demo Member", email: "demo@topmlmleaders.com", plan: "free" }); }} style={{ flex: 1, borderRadius: 12, border: "none", background: "var(--color-primary)", color: "#FFFFFF", padding: "10px 12px", fontWeight: 700, cursor: "pointer" }}>
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

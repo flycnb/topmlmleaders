@@ -2,20 +2,58 @@ import React, { useState } from "react";
 import "./App.css";
 import Home from "./pages/Home";
 import MemberProfile from "./features/profile";
+import AuthModal from "./features/auth";
+import { useAuth } from "./features/auth/useAuth";
+import { useFollow } from "./features/follow/useFollow";
+import { useBookmarks } from "./features/bookmarks/useBookmarks";
+import FlagModal from "./features/flags/FlagModal";
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState("home");
   const [selectedMember, setSelectedMember] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [flagMember, setFlagMember] = useState(null);
+  const { user, loading, signInWithGoogle, signOut } = useAuth();
+  const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
+  const { isBookmarked, toggleBookmark } = useBookmarks(user, () => setShowAuth(true));
+
+  function onAuthRequired() {
+    setShowAuth(true);
+  }
 
   if (currentScreen === "home") {
     return (
-      <Home
-        onOpenDashboard={() => setCurrentScreen("dashboard")}
-        onOpenProfile={(member) => {
-          setSelectedMember(member);
-          setCurrentScreen("profile");
-        }}
-      />
+      <>
+        <Home
+          user={user}
+          loadingAuth={loading}
+          onSignOut={signOut}
+          onAuthRequired={onAuthRequired}
+          isFollowing={isFollowing}
+          toggleFollow={toggleFollow}
+          isBookmarked={isBookmarked}
+          toggleBookmark={toggleBookmark}
+          onFlagMember={setFlagMember}
+          onOpenDashboard={() => setCurrentScreen("dashboard")}
+          onOpenProfile={(member) => {
+            setSelectedMember(member);
+            setCurrentScreen("profile");
+          }}
+        />
+        <AuthModal
+          open={showAuth}
+          onClose={() => setShowAuth(false)}
+          signInWithGoogle={signInWithGoogle}
+          loading={loading}
+        />
+        <FlagModal
+          open={Boolean(flagMember)}
+          onClose={() => setFlagMember(null)}
+          user={user}
+          member={flagMember}
+          onAuthRequired={onAuthRequired}
+        />
+      </>
     );
   }
 
@@ -34,12 +72,22 @@ function App() {
 
   if (currentScreen === "profile") {
     return (
-      <MemberProfile
-        member={selectedMember}
-        onBack={() => {
-          setCurrentScreen("home");
-        }}
-      />
+      <>
+        <MemberProfile
+          member={selectedMember}
+          user={user}
+          onAuthRequired={onAuthRequired}
+          isFollowing={isFollowing}
+          toggleFollow={toggleFollow}
+          onBack={() => setCurrentScreen("home")}
+        />
+        <AuthModal
+          open={showAuth}
+          onClose={() => setShowAuth(false)}
+          signInWithGoogle={signInWithGoogle}
+          loading={loading}
+        />
+      </>
     );
   }
 

@@ -1,5 +1,5 @@
 # Feature: Flags
-Status: Todo
+Status: In Progress
 Files: src/features/flags/FlagModal.js
 Database: flags table
-Notes: Reason dropdown + optional description. Auth required.
+Notes: Slide-up report modal with reason validation, description counter, Supabase save, success state, and auth-required gating.

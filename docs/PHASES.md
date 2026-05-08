@@ -84,7 +84,7 @@ Tasks:
 
 ## PHASE 4 — Auth + Follow + Bookmark + Flag
 **Goal:** Google login + all social features working correctly
-**Status:** 🔲 Todo
+**Status:** 🟡 In Progress
 
 Tasks:
 - [ ] Google OAuth with PKCE (works in Chrome AND Safari)

@@ -1,5 +1,5 @@
 # Feature: Bookmarks
-Status: Todo
+Status: In Progress
 Files: src/features/bookmarks/useBookmarks.js
 Database: bookmarks table
-Notes: Optimistic UI. Auth required. Searchable in dashboard.
+Notes: Optimistic bookmark toggle with Supabase persistence and auth-required gating.
