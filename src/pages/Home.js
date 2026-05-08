@@ -39,6 +39,8 @@ function SkeletonCard({ id }) {
 
 function Home({
   user,
+  loadingAuth = false,
+  signingOut = false,
   onSignOut,
   onAuthRequired,
   isFollowing,
@@ -70,6 +72,12 @@ function Home({
     markOneRead,
     loading: notificationsLoading,
   } = useNotifications(user);
+
+  async function handleLogout() {
+    setShowUserMenu(false);
+    setShowNotifications(false);
+    await onSignOut();
+  }
 
   function timeAgo(value) {
     const timestamp = new Date(value).getTime();
@@ -289,8 +297,27 @@ function Home({
     return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 24px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
   }
 
+  const sessionBusy = Boolean(loadingAuth && !user);
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--color-bg)", position: "relative" }}>
+      {sessionBusy ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 150,
+            background: "rgba(255,255,255,0.55)",
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "auto",
+            cursor: "wait",
+          }}
+          aria-live="polite"
+        >
+          <span style={{ color: "var(--color-muted)", fontSize: 14, fontWeight: 600 }}>Restoring your session...</span>
+        </div>
+      ) : null}
       <header style={{ position: "sticky", top: 0, zIndex: 40, background: "#FFFFFF", borderBottom: "1px solid var(--color-border)", padding: "10px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <button
@@ -400,8 +427,23 @@ function Home({
                     <button type="button" onClick={() => { setShowUserMenu(false); onOpenDashboard(); }} style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 8, padding: "10px 8px", fontWeight: 600, cursor: "pointer" }}>
                       👤 Open Dashboard
                     </button>
-                    <button type="button" onClick={() => { setShowUserMenu(false); onSignOut(); }} style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 8, padding: "10px 8px", fontWeight: 600, cursor: "pointer" }}>
-                      🚪 Logout
+                    <button
+                      type="button"
+                      disabled={signingOut}
+                      onClick={() => void handleLogout()}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        padding: "10px 8px",
+                        fontWeight: 600,
+                        cursor: signingOut ? "wait" : "pointer",
+                        opacity: signingOut ? 0.65 : 1,
+                      }}
+                    >
+                      {signingOut ? "Signing out..." : "🚪 Logout"}
                     </button>
                   </div>
                 ) : null}

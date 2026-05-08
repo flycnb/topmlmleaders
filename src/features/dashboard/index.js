@@ -35,6 +35,7 @@ function slugify(text) {
 
 function Dashboard({
   user,
+  authInitializing = false,
   onBack,
   onOpenChat,
   onOpenProfile,
@@ -89,7 +90,11 @@ function Dashboard({
   }, [myMember?.slug, profileForm.name, user?.name]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (authInitializing) return undefined;
+    if (!user?.id) {
+      setLoading(false);
+      return undefined;
+    }
     let active = true;
 
     async function loadDashboard() {
@@ -216,8 +221,9 @@ function Dashboard({
     loadDashboard();
     return () => {
       active = false;
+      setLoading(false);
     };
-  }, [user?.id, user?.name]);
+  }, [authInitializing, user?.id, user?.name]);
 
   async function saveProfile() {
     if (!user?.id) return;
@@ -450,6 +456,14 @@ function Dashboard({
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  if (authInitializing) {
+    return (
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+        <p style={{ color: "var(--color-muted)", fontSize: 16 }}>Restoring your session...</p>
+      </main>
+    );
+  }
 
   if (!user) {
     return (

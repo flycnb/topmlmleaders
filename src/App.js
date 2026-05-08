@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Home from "./pages/Home";
 import MemberProfile from "./features/profile";
@@ -17,9 +17,21 @@ function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [flagMember, setFlagMember] = useState(null);
   const [chatMember, setChatMember] = useState(null);
-  const { user, loading, signInWithGoogle, signOut } = useAuth();
+  const { user, loading, oauthRedirecting, signingOut, signInWithGoogle, signOut } = useAuth();
   const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
   const { isBookmarked, toggleBookmark } = useBookmarks(user, () => setShowAuth(true));
+  const hadUserRef = useRef(false);
+
+  useEffect(() => {
+    const hasUser = Boolean(user?.id);
+    if (hasUser && !hadUserRef.current) {
+      setCurrentScreen("home");
+      setSelectedMember(null);
+      setShowAuth(false);
+      setFlagMember(null);
+    }
+    hadUserRef.current = hasUser;
+  }, [user?.id]);
 
   function onAuthRequired() {
     setShowAuth(true);
@@ -43,6 +55,7 @@ function App() {
         <Home
           user={user}
           loadingAuth={loading}
+          signingOut={signingOut}
           onSignOut={signOut}
           onAuthRequired={onAuthRequired}
           isFollowing={isFollowing}
@@ -62,7 +75,7 @@ function App() {
           open={showAuth}
           onClose={() => setShowAuth(false)}
           signInWithGoogle={signInWithGoogle}
-          loading={loading}
+          loading={oauthRedirecting || loading}
         />
         <FlagModal
           open={Boolean(flagMember)}
@@ -81,6 +94,7 @@ function App() {
       <>
         <Dashboard
           user={user}
+          authInitializing={loading}
           onBack={() => setCurrentScreen("home")}
           onOpenChat={openChat}
           onOpenProfile={(member) => {
@@ -93,7 +107,7 @@ function App() {
           open={showAuth}
           onClose={() => setShowAuth(false)}
           signInWithGoogle={signInWithGoogle}
-          loading={loading}
+          loading={oauthRedirecting || loading}
         />
         <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
       </>
@@ -116,7 +130,7 @@ function App() {
           open={showAuth}
           onClose={() => setShowAuth(false)}
           signInWithGoogle={signInWithGoogle}
-          loading={loading}
+          loading={oauthRedirecting || loading}
         />
         <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
       </>

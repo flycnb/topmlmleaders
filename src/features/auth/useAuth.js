@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
 function mapUser(session, plan = "free") {
@@ -14,32 +14,39 @@ function mapUser(session, plan = "free") {
   };
 }
 
+/** Ensures INITIAL_SESSION/PKCE never leaves the app stuck in loading=false with no user while URL exchange runs. */
+const SESSION_FALLBACK_MS = 400;
+
 export function useAuth() {
   const [session, setSession] = useState(null);
+  /** True until first auth hydration (INITIAL_SESSION / SIGNED_IN / SIGNED_OUT path). */
   const [loading, setLoading] = useState(true);
+  const [oauthRedirecting, setOauthRedirecting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [plan, setPlan] = useState("free");
+  const bootstrapDoneRef = useRef(false);
 
   useEffect(() => {
     let active = true;
 
-    async function fetchInitial() {
-      const { data } = await supabase.auth.getSession();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (!active) return;
-      setSession(data?.session || null);
-      setLoading(false);
-    }
 
-    fetchInitial();
+      const applySessionAndFinishBootstrap = (next) => {
+        setSession(next ?? null);
+        setLoading(false);
+        bootstrapDoneRef.current = true;
+      };
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      if (!active) return;
       if (event === "INITIAL_SESSION") {
-        setSession(nextSession || null);
-        setLoading(false);
+        applySessionAndFinishBootstrap(nextSession);
+        return;
       }
+
       if (event === "SIGNED_IN") {
-        setSession(nextSession || null);
-        setLoading(false);
+        applySessionAndFinishBootstrap(nextSession);
         const nextUser = nextSession?.user;
         if (nextUser?.id) {
           const email = nextUser.email || "";
@@ -59,43 +66,63 @@ export function useAuth() {
           );
           setPlan("free");
         }
+        return;
       }
+
       if (event === "SIGNED_OUT") {
-        setSession(null);
-        setLoading(false);
+        applySessionAndFinishBootstrap(null);
+        setPlan("free");
+        return;
       }
+
       if (event === "TOKEN_REFRESHED") {
-        setSession(nextSession || null);
+        setSession(nextSession ?? null);
       }
     });
 
+    const fallbackTimer = window.setTimeout(async () => {
+      if (!active || bootstrapDoneRef.current) return;
+      const { data } = await supabase.auth.getSession();
+      if (!active || bootstrapDoneRef.current) return;
+      setSession(data?.session ?? null);
+      setLoading(false);
+      bootstrapDoneRef.current = true;
+    }, SESSION_FALLBACK_MS);
+
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
+      window.clearTimeout(fallbackTimer);
+      subscription.unsubscribe();
     };
   }, []);
 
   async function signInWithGoogle() {
-    setLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/`,
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
+    setOauthRedirecting(true);
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
-      },
-    });
+      });
+    } catch {
+      setOauthRedirecting(false);
+    }
   }
 
   async function signOut() {
-    setLoading(true);
-    await supabase.auth.signOut();
-    setLoading(false);
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   const user = useMemo(() => mapUser(session, plan), [session, plan]);
-  return { user, session, loading, signInWithGoogle, signOut };
+  return { user, session, loading, oauthRedirecting, signingOut, signInWithGoogle, signOut };
 }
-
