@@ -6,6 +6,9 @@ import { applyMemberSearch, mapMembers, SEARCH_FILTERS } from "../features/searc
 import { useNotifications } from "../features/notifications/useNotifications";
 import AISearchAssistant from "../features/ai-search";
 import { useAI } from "../features/ai-search/useAI";
+import Leaderboard from "./Leaderboard";
+import Board from "./Board";
+import Plans from "./Plans";
 
 const FALLBACK_MEMBERS = [
   { id: "f-1", name: "Rajnish Kumar", city: "Mumbai", country: "India", company: "Herbalife", role: "Diamond Leader", plan: "elite", yearsExp: 15, followerCount: 1240, color: "#6C63FF", initials: "RK", rating: 4.9, reviews: 124, wa: "919876500001", waVisibility: "public", verified: true, slots: 3 },
@@ -398,10 +401,6 @@ function Home({
     );
   }
 
-  function renderPlaceholder(text) {
-    return <section style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px 24px" }}><h2 style={{ margin: 0, color: "var(--color-muted)", fontWeight: 700 }}>{text}</h2></section>;
-  }
-
   const sessionBusy = false;
 
   return (
@@ -560,9 +559,17 @@ function Home({
         </div>
       </header>
       {activeTab === "directory" && renderDirectory()}
-      {activeTab === "top" && renderPlaceholder("🏆 Leaderboard coming soon")}
-      {activeTab === "board" && renderPlaceholder("📋 Opportunity Board coming soon")}
-      {activeTab === "plans" && renderPlaceholder("💎 Plans coming soon")}
+      {activeTab === "top" ? (
+        <Leaderboard
+          user={user}
+          isFollowing={isFollowing}
+          toggleFollow={toggleFollow}
+          onOpenProfile={onOpenProfile}
+          onAuthRequired={onAuthRequired}
+        />
+      ) : null}
+      {activeTab === "board" ? <Board user={user} onAuthRequired={onAuthRequired} /> : null}
+      {activeTab === "plans" ? <Plans /> : null}
     </div>
   );
 }

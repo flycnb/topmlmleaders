@@ -1,6 +1,6 @@
 # 📊 PHASES — TopMLMLeaders.com Build Plan
 
-Last updated: May 2026
+Last updated: May 2026 (TICKET-010: Leaderboard, Opportunity Board, Plans pages)
 
 ---
 
@@ -40,9 +40,9 @@ Tasks:
 - [ ] Infinite scroll (12 per load)
 - [ ] Sort: Elite → Pro → Free → by followers
 - [ ] Load real data from Supabase members table
-- [ ] Leaderboard tab
-- [ ] Opportunity Board tab
-- [ ] Plans tab (static, no payment yet)
+- [x] Leaderboard tab (TICKET-010)
+- [x] Opportunity Board tab (TICKET-010)
+- [x] Plans tab (static pricing + coupon check; Razorpay placeholder — TICKET-010)
 - [ ] Me tab (login prompt)
 - [ ] Bottom navigation
 
