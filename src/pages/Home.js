@@ -403,6 +403,32 @@ function Home({
 
   const sessionBusy = false;
 
+  /** Main section pills (Top / Board / Plans): clear filled style when active, muted when not. */
+  function navTabStyle(tabId) {
+    const selected = activeTab === tabId;
+    if (selected) {
+      return {
+        border: "1px solid var(--color-primary)",
+        borderRadius: 999,
+        background: "var(--color-primary)",
+        padding: "8px 12px",
+        color: "#FFFFFF",
+        fontWeight: 800,
+        cursor: "pointer",
+        boxShadow: "0 2px 10px rgba(108, 99, 255, 0.35)",
+      };
+    }
+    return {
+      border: "1px solid var(--color-border)",
+      borderRadius: 999,
+      background: "#F3F4F6",
+      padding: "8px 12px",
+      color: "var(--color-muted)",
+      fontWeight: 600,
+      cursor: "pointer",
+    };
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg)", position: "relative" }}>
       {sessionBusy ? (
@@ -435,14 +461,29 @@ function Home({
             <div style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: 20 }}>🌐 TopMLMLeaders</div>
             <div style={{ fontSize: 12, color: "var(--color-muted)" }}>AI Powered Search · Connect · Grow Worldwide</div>
           </button>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button type="button" onClick={() => setActiveTab("top")} style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-text)", fontWeight: 700, cursor: "pointer" }}>
+          <nav style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }} aria-label="Site sections">
+            <button
+              type="button"
+              aria-current={activeTab === "top" ? "page" : undefined}
+              onClick={() => setActiveTab("top")}
+              style={navTabStyle("top")}
+            >
               🏆 Top
             </button>
-            <button type="button" onClick={() => setActiveTab("board")} style={{ border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", padding: "7px 10px", color: "var(--color-text)", fontWeight: 700, cursor: "pointer" }}>
+            <button
+              type="button"
+              aria-current={activeTab === "board" ? "page" : undefined}
+              onClick={() => setActiveTab("board")}
+              style={navTabStyle("board")}
+            >
               📋 Board
             </button>
-            <button type="button" onClick={() => setActiveTab("plans")} style={{ border: "none", borderRadius: 999, background: "#F59E0B", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
+            <button
+              type="button"
+              aria-current={activeTab === "plans" ? "page" : undefined}
+              onClick={() => setActiveTab("plans")}
+              style={navTabStyle("plans")}
+            >
               💎 Plans
             </button>
             {user?.email === "digidreamltd@gmail.com" ? (
@@ -555,7 +596,7 @@ function Home({
             ) : (
               <button type="button" onClick={onAuthRequired} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "7px 12px", fontWeight: 700, cursor: "pointer" }}>Login</button>
             )}
-          </div>
+          </nav>
         </div>
       </header>
       {activeTab === "directory" && renderDirectory()}
