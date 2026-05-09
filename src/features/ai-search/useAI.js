@@ -15,15 +15,43 @@ const AI_FETCH_DEADLINE_MS = 65000;
 /** Prevent hanging forever on stalled JSON streams (Safari has seen rare stalls). */
 const RESPONSE_JSON_DEADLINE_MS = 45000;
 
+/** Strip ```json ... ``` fences Claude sometimes adds despite instructions. */
+function stripMarkdownJsonFence(raw) {
+  let s = String(raw || "").trim();
+  const fenced = s.match(/^```(?:json)?\s*([\s\S]*?)```$/im);
+  if (fenced) s = fenced[1].trim();
+  return s;
+}
+
+/**
+ * First balanced `{ ... }` only — avoids greedy `\{[\s\S]*\}` swallowing extra text
+ * or matching the wrong object when the model echoes API-shaped blobs.
+ */
+function extractFirstBalancedJsonObject(s) {
+  const str = String(s || "");
+  const start = str.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < str.length; i++) {
+    const c = str[i];
+    if (c === "{") depth += 1;
+    else if (c === "}") {
+      depth -= 1;
+      if (depth === 0) return str.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function parseAiJson(raw) {
-  const trimmed = String(raw || "").trim();
+  const stripped = stripMarkdownJsonFence(raw);
   try {
-    return JSON.parse(trimmed);
+    return JSON.parse(stripped);
   } catch {
-    const match = trimmed.match(/\{[\s\S]*\}/);
-    if (match) {
+    const balanced = extractFirstBalancedJsonObject(stripped);
+    if (balanced) {
       try {
-        return JSON.parse(match[0]);
+        return JSON.parse(balanced);
       } catch {
         /* fall through */
       }
@@ -32,14 +60,59 @@ function parseAiJson(raw) {
   }
 }
 
+/** Drop Anthropic/API leakage; keep only directory filter keys. */
+function filterShapeOnly(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+  const allowed = ["name", "city", "country", "company", "role", "min_years_exp", "plan"];
+  const out = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) out[key] = obj[key];
+  }
+  return out;
+}
+
+function extractAnthropicStyleTextBlocks(content) {
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((b) => b && typeof b === "object" && !Array.isArray(b) && b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("");
+}
+
+/**
+ * Edge returns `{ ok, text }`; if anything upstream leaked an Anthropic-shaped JSON into the body,
+ * recover assistant text from `content[]` instead of treating `model` as a filter field.
+ */
+function extractAssistantTextFromEdgePayload(data) {
+  if (!data || typeof data !== "object") return "";
+  if (typeof data.text === "string" && data.text.trim()) return data.text.trim();
+  if (data.filters && typeof data.filters === "object") {
+    try {
+      return JSON.stringify(data.filters);
+    } catch {
+      return "";
+    }
+  }
+  const fromContent = extractAnthropicStyleTextBlocks(data.content);
+  if (fromContent.trim()) return fromContent.trim();
+  return "";
+}
+
 function sanitizeFilters(obj) {
   if (!obj || typeof obj !== "object") return null;
+  /** Ignore mistaken `role: "assistant"` / model echoes */
+  const roleVal =
+    typeof obj.role === "string" && obj.role.trim()
+      ? obj.role.trim()
+      : "";
+  const badRole = /^assistant$/i.test(roleVal) || /^user$/i.test(roleVal);
+
   const shape = {};
   if (typeof obj.name === "string" && obj.name.trim()) shape.name = obj.name.trim();
   if (typeof obj.city === "string" && obj.city.trim()) shape.city = obj.city.trim();
   if (typeof obj.country === "string" && obj.country.trim()) shape.country = obj.country.trim();
   if (typeof obj.company === "string" && obj.company.trim()) shape.company = obj.company.trim();
-  if (typeof obj.role === "string" && obj.role.trim()) shape.role = obj.role.trim();
+  if (!badRole && roleVal) shape.role = roleVal;
   if (obj.min_years_exp != null && obj.min_years_exp !== "") {
     const years = Number(obj.min_years_exp);
     if (!Number.isNaN(years)) shape.min_years_exp = years;
@@ -244,9 +317,16 @@ export function useAI(user) {
         }
 
         const data = result.data;
-        const text = typeof data.text === "string" ? data.text : "{}";
+        const assistantRaw = extractAssistantTextFromEdgePayload(data);
+        if (!assistantRaw) {
+          setFilters(null);
+          setBannerQuery("");
+          setAssistantNote("AI returned no filter text. Try again or rephrase.");
+          return;
+        }
 
-        const parsed = sanitizeFilters(parseAiJson(text));
+        const rawObj = parseAiJson(assistantRaw);
+        const parsed = sanitizeFilters(filterShapeOnly(rawObj));
         if (!parsed || Object.keys(parsed).length === 0) {
           setFilters(null);
           setBannerQuery("");
