@@ -27,6 +27,17 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
+/** Standalone helpers for email/password auth (used by AuthModal; same Supabase client as the hook). */
+export async function signInWithEmailPassword(email, password) {
+  const trimmed = String(email || "").trim();
+  return supabase.auth.signInWithPassword({ email: trimmed, password });
+}
+
+export async function signUpWithEmail(email, password) {
+  const trimmed = String(email || "").trim();
+  return supabase.auth.signUp({ email: trimmed, password });
+}
+
 export function useAuth() {
   const [session, setSession] = useState(null);
   /** True until first auth hydration (INITIAL_SESSION / SIGNED_IN / SIGNED_OUT path). */

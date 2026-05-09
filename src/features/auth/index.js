@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { signInWithEmailPassword, signUpWithEmail } from "./useAuth";
 
 function GoogleIcon() {
   return (
@@ -12,7 +13,85 @@ function GoogleIcon() {
 }
 
 function AuthModal({ open, onClose, signInWithGoogle, loading }) {
+  const [authTab, setAuthTab] = useState("email");
+  const [emailMode, setEmailMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState("");
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setAuthTab("email");
+      setEmailMode("login");
+      setEmail("");
+      setPassword("");
+      setEmailError("");
+      setEmailSuccess("");
+    }
+  }, [open]);
+
   if (!open) return null;
+
+  async function handleEmailSubmit(event) {
+    event.preventDefault();
+    setEmailError("");
+    setEmailSuccess("");
+    const e = email.trim();
+    if (!e || !password) {
+      setEmailError("Enter email and password.");
+      return;
+    }
+    setEmailSubmitting(true);
+    try {
+      if (emailMode === "login") {
+        const { error } = await signInWithEmailPassword(e, password);
+        if (error) {
+          setEmailError(error.message || "Could not sign in.");
+          return;
+        }
+        onClose();
+      } else {
+        const { data, error } = await signUpWithEmail(e, password);
+        if (error) {
+          setEmailError(error.message || "Could not create account.");
+          return;
+        }
+        if (data?.session) {
+          onClose();
+        } else {
+          setEmailSuccess("Check your inbox to confirm your email, then sign in.");
+        }
+      }
+    } finally {
+      setEmailSubmitting(false);
+    }
+  }
+
+  const tabBtn = (id, label) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => {
+        setAuthTab(id);
+        setEmailError("");
+        setEmailSuccess("");
+      }}
+      style={{
+        flex: 1,
+        border: "none",
+        borderRadius: 12,
+        padding: "10px 12px",
+        fontWeight: 700,
+        cursor: "pointer",
+        background: authTab === id ? "var(--color-primary)" : "transparent",
+        color: authTab === id ? "#FFFFFF" : "var(--color-muted)",
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -77,42 +156,176 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
             Connect with leaders worldwide
           </p>
         </div>
+
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 14,
-            color: "var(--color-muted)",
-            fontSize: 12,
+            gap: 6,
+            padding: 4,
+            marginBottom: 16,
+            borderRadius: 14,
+            background: "#F3F4F6",
           }}
         >
-          <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
-          Continue with
-          <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+          {tabBtn("email", "Email")}
+          {tabBtn("google", "Google")}
         </div>
-        <button
-          type="button"
-          onClick={signInWithGoogle}
-          disabled={loading}
-          style={{
-            width: "100%",
-            borderRadius: 12,
-            border: "1px solid var(--color-border)",
-            background: "#FFFFFF",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
-            padding: "12px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {loading ? <span className="spinner">⏳</span> : <GoogleIcon />}
-          {loading ? "Redirecting..." : "Continue with Google"}
-        </button>
+
+        {authTab === "email" ? (
+          <form onSubmit={handleEmailSubmit}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--color-text)" }}>
+              Email
+            </label>
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(ev) => setEmail(ev.target.value)}
+              placeholder="you@example.com"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                marginBottom: 12,
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: "1px solid var(--color-border)",
+                fontSize: 15,
+              }}
+            />
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--color-text)" }}>
+              Password
+            </label>
+            <input
+              type="password"
+              autoComplete={emailMode === "login" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(ev) => setPassword(ev.target.value)}
+              placeholder="••••••••"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                marginBottom: 12,
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: "1px solid var(--color-border)",
+                fontSize: 15,
+              }}
+            />
+            {emailError ? (
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#DC2626" }}>{emailError}</p>
+            ) : null}
+            {emailSuccess ? (
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#059669" }}>{emailSuccess}</p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={emailSubmitting}
+              style={{
+                width: "100%",
+                borderRadius: 12,
+                border: "none",
+                background: "var(--color-primary)",
+                color: "#FFFFFF",
+                padding: "12px 14px",
+                fontWeight: 700,
+                cursor: emailSubmitting ? "default" : "pointer",
+                opacity: emailSubmitting ? 0.75 : 1,
+                marginBottom: 12,
+              }}
+            >
+              {emailSubmitting ? "Please wait…" : emailMode === "login" ? "Log in" : "Sign up"}
+            </button>
+            <p style={{ margin: 0, textAlign: "center", fontSize: 14, color: "var(--color-muted)" }}>
+              {emailMode === "login" ? (
+                <>
+                  New here?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailMode("signup");
+                      setEmailError("");
+                      setEmailSuccess("");
+                    }}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "var(--color-primary)",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      padding: 0,
+                      fontSize: 14,
+                    }}
+                  >
+                    Sign up
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailMode("login");
+                      setEmailError("");
+                      setEmailSuccess("");
+                    }}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "var(--color-primary)",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      padding: 0,
+                      fontSize: 14,
+                    }}
+                  >
+                    Log in
+                  </button>
+                </>
+              )}
+            </p>
+          </form>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 14,
+                color: "var(--color-muted)",
+                fontSize: 12,
+              }}
+            >
+              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+              Continue with
+              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+            </div>
+            <button
+              type="button"
+              onClick={signInWithGoogle}
+              disabled={loading}
+              style={{
+                width: "100%",
+                borderRadius: 12,
+                border: "1px solid var(--color-border)",
+                background: "#FFFFFF",
+                boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {loading ? <span className="spinner">⏳</span> : <GoogleIcon />}
+              {loading ? "Redirecting..." : "Continue with Google"}
+            </button>
+          </>
+        )}
+
         <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 11, color: "var(--color-muted)" }}>
           By continuing you agree to our Terms of Service
         </p>
@@ -122,4 +335,3 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
 }
 
 export default AuthModal;
-
