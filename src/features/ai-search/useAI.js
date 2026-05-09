@@ -6,6 +6,9 @@ const DEFAULT_SETTINGS = {
   available_to: "loggedin",
 };
 
+/** Client-side ceiling so the Ask button cannot spin forever if the relay/worker hangs. */
+const FUNCTIONS_INVOKE_TIMEOUT_MS = 62000;
+
 function parseAiJson(raw) {
   const trimmed = String(raw || "").trim();
   try {
@@ -39,6 +42,36 @@ function sanitizeFilters(obj) {
     shape.plan = obj.plan;
   }
   return Object.keys(shape).length ? shape : null;
+}
+
+async function formatFunctionsError(error) {
+  const name = error?.name ?? "";
+  let msg =
+    typeof error?.message === "string" && error.message.trim().length ? error.message : "AI request failed. Try again.";
+
+  if (name === "FunctionsFetchError" || /abort/i.test(msg)) {
+    return "Request timed out. Try again.";
+  }
+
+  /** @type {{ ok?: boolean; error?: unknown; message?: string } | null} */
+  let parsed = null;
+  if (name === "FunctionsHttpError" && error.context && typeof error.context.json === "function") {
+    try {
+      parsed = await error.context.json();
+    } catch {
+      parsed = null;
+    }
+    if (parsed && typeof parsed === "object") {
+      if ("error" in parsed && parsed.error != null) return String(parsed.error);
+      if (typeof parsed.message === "string") return parsed.message;
+    }
+  }
+
+  if (parsed && parsed.ok === false && parsed.error != null) {
+    return String(parsed.error);
+  }
+
+  return msg;
 }
 
 function userMayUseAi(settings, user) {
@@ -126,12 +159,21 @@ export function useAI(user) {
 
       setLoading(true);
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token ?? null;
+
         const { data, error } = await supabase.functions.invoke("ai-search", {
           body: { query: trimmed },
+          timeout: FUNCTIONS_INVOKE_TIMEOUT_MS,
+          headers: accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : {},
         });
 
         if (error) {
-          setAssistantNote(error.message || "AI request failed. Try again.");
+          setAssistantNote(await formatFunctionsError(error));
           return;
         }
 
@@ -156,8 +198,8 @@ export function useAI(user) {
         }
         setFilters(parsed);
         setBannerQuery(trimmed);
-      } catch {
-        setAssistantNote("Network error. Check connection or try later.");
+      } catch (err) {
+        setAssistantNote(await formatFunctionsError(err));
       } finally {
         setLoading(false);
       }

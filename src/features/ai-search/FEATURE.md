@@ -11,8 +11,11 @@
 
 Defaults when no row: `provider: claude`, `available_to: loggedin`
 
-## Environment
-- `REACT_APP_ANTHROPIC_API_KEY` — required for Claude from the browser (Vercel / local `.env`)
+## Environment / deploy
+- **Anthropic:** set **`ANTHROPIC_API_KEY`** as a Supabase secret (`supabase secrets set …`), not in the React bundle.
+- **Edge Function JWT:** `supabase/config.toml` sets **`[functions.ai-search] verify_jwt = false`** so the SPA can invoke with the anon **`apikey`** reliably. Redeploy after changing config:
+  - `supabase functions deploy ai-search --project-ref <ref>`
+- **Client timeout:** `useAI` passes `timeout` on `functions.invoke` (~62s) so the Ask button cannot spin forever.
 
 ## Notes
 - Gemini: shows **“Gemini coming soon”** in panel (no API call).

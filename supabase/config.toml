@@ -1,0 +1,6 @@
+# https://supabase.com/docs/guides/functions/function-configuration
+#
+# AI search is called from the SPA with the anon apikey; JWT was optional and
+# could block or confuse the gateway for some clients. Redeploy ai-search after changing.
+[functions.ai-search]
+verify_jwt = false

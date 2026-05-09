@@ -71,20 +71,41 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: query }],
-      }),
-    });
+    const abort = new AbortController();
+    const anthropicTimeoutMs = 45000;
+    const timeoutId = setTimeout(() => abort.abort(), anthropicTimeoutMs);
+
+    let anthropicRes: Response;
+    try {
+      anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: abort.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 500,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: query }],
+        }),
+      });
+    } catch (e) {
+      const isAbort =
+        abort.signal.aborted ||
+        (typeof e === "object" && e !== null && "name" in e && (e as { name?: string }).name === "AbortError");
+      if (isAbort) {
+        return new Response(JSON.stringify({ ok: false, error: "Anthropic request timed out." }), {
+          status: 504,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        });
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const data = (await anthropicRes.json()) as Record<string, unknown>;
 
