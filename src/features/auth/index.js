@@ -23,8 +23,9 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
         zIndex: 200,
         background: "rgba(0,0,0,0.6)",
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
+        padding: 16,
       }}
     >
       <div
@@ -33,9 +34,9 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
         style={{
           width: "100%",
           maxWidth: 480,
-          borderRadius: "20px 20px 0 0",
+          borderRadius: 20,
           background: "#FFFFFF",
-          padding: "16px 16px calc(20px + var(--safe-bottom))",
+          padding: 16,
           position: "relative",
         }}
       >
