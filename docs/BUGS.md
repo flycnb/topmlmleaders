@@ -14,7 +14,14 @@ Last updated: May 2026
 ---
 
 ## 🔴 ACTIVE BUGS
-None
+
+### BUG-006 — AI search showing model name instead of filtering results
+- **Reported:** May 2026
+- **Actual:** AI Search Assistant sometimes showed plain text `model: claude-sonnet-4-20250514` instead of applying JSON filters to the directory.
+- **Root cause:** Claude response not being parsed correctly end-to-end (client envelope handling + assistant message text extraction). Revisit later for full verification and any remaining edge cases.
+- **Fix:** TBD — revisit later (see recent commits around Edge envelope normalization and filter parsing).
+- **Files changed:** (when verified) `src/features/ai-search/useAI.js`, `supabase/functions/ai-search/index.ts`
+- **Verified:** No — revisit later
 
 ---
 
