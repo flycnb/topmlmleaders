@@ -98,6 +98,38 @@ function extractAssistantTextFromEdgePayload(data) {
   return "";
 }
 
+/**
+ * Edge Function contract: `{ ok: true, text: string }` or `{ ok: false, error: string }`.
+ * If a proxy leaks raw Anthropic JSON, recover `content[].text` instead of failing.
+ */
+function normalizeEdgeSuccessEnvelope(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    return { success: false, message: "Unexpected response from AI service." };
+  }
+  const p = /** @type {Record<string, unknown>} */ (parsed);
+
+  if (p.ok === false && p.error != null) {
+    return { success: false, message: String(p.error) };
+  }
+
+  if (p.ok === true && typeof p.text === "string") {
+    return { success: true, data: p };
+  }
+
+  const content = p.content;
+  if (Array.isArray(content)) {
+    const extracted = extractAnthropicStyleTextBlocks(content).trim();
+    if (extracted) {
+      return { success: true, data: { ok: true, text: extracted } };
+    }
+  }
+
+  return {
+    success: false,
+    message: "AI service returned an unexpected format. Redeploy the ai-search Edge Function.",
+  };
+}
+
 function sanitizeFilters(obj) {
   if (!obj || typeof obj !== "object") return null;
   /** Ignore mistaken `role: "assistant"` / model echoes */
@@ -185,11 +217,20 @@ async function postAiSearch(query, accessToken) {
     if (contentType.includes("application/json")) {
       parsed = await withDeadline(response.json(), RESPONSE_JSON_DEADLINE_MS, "json-timeout");
     } else {
-      const text = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
+      const textBody = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
       try {
-        parsed = JSON.parse(text);
+        parsed = JSON.parse(textBody);
       } catch {
-        parsed = { ok: false, error: text?.slice?.(0, 200) || `HTTP ${response.status}` };
+        /**
+         * Was surfacing raw body (e.g. `model: claude-sonnet-…`) as assistantNote because
+         * `{ ok: false, error: text.slice(...) }` tripped the success-path error handler.
+         */
+        return {
+          ok: false,
+          message:
+            "AI service returned non-JSON. Confirm the ai-search Edge Function is deployed and returns JSON.",
+          data: null,
+        };
       }
     }
 
@@ -207,13 +248,12 @@ async function postAiSearch(query, accessToken) {
       return { ok: false, message: "Unexpected response from AI service.", data: null };
     }
 
-    /** @type {Record<string, unknown>} */
-    const data = /** @type {Record<string, unknown>} */ (parsed);
-    if (data.ok === false && data.error != null) {
-      return { ok: false, message: String(data.error), data: null };
+    const normalized = normalizeEdgeSuccessEnvelope(parsed);
+    if (!normalized.success) {
+      return { ok: false, message: normalized.message, data: null };
     }
 
-    return { ok: true, message: "", data };
+    return { ok: true, message: "", data: normalized.data };
   } catch (e) {
     const aborted =
       controller.signal.aborted ||
@@ -333,6 +373,7 @@ export function useAI(user) {
           setAssistantNote("No filters found. Try mentioning city, role, company, or years of experience.");
           return;
         }
+        setAssistantNote("");
         setFilters(parsed);
         setBannerQuery(trimmed);
       } catch (err) {

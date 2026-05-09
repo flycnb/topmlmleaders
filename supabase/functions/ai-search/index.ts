@@ -31,6 +31,14 @@ function extractText(data: Record<string, unknown>): string {
   return parts || "{}";
 }
 
+/** Claude occasionally echoes request metadata instead of JSON — never ship that as filter text. */
+function sanitizeFilterJsonText(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "{}";
+  if (/^model\s*:\s*[\w.+-]+\s*$/i.test(t)) return "{}";
+  return raw;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders() });
@@ -122,7 +130,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const text = extractText(data);
+    const text = sanitizeFilterJsonText(extractText(data));
     return new Response(JSON.stringify({ ok: true, text }), {
       status: 200,
       headers: { ...corsHeaders(), "Content-Type": "application/json", Connection: "close" },
