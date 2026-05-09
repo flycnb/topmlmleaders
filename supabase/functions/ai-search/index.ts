@@ -13,6 +13,8 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    /** Fewer flaky Safari preflight re-validation cycles during dev. */
+    "Access-Control-Max-Age": "86400",
   };
 }
 
@@ -123,12 +125,23 @@ Deno.serve(async (req) => {
     const text = extractText(data);
     return new Response(JSON.stringify({ ok: true, text }), {
       status: 200,
-      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      headers: { ...corsHeaders(), "Content-Type": "application/json", Connection: "close" },
     });
-  } catch {
+  } catch (e) {
+    const timedOut =
+      typeof e === "object" &&
+      e !== null &&
+      "message" in e &&
+      String((e as { message?: string }).message).includes("anthropic-response-json-timeout");
+    if (timedOut) {
+      return new Response(JSON.stringify({ ok: false, error: "Anthropic response timed out." }), {
+        status: 504,
+        headers: { ...corsHeaders(), "Content-Type": "application/json", Connection: "close" },
+      });
+    }
     return new Response(JSON.stringify({ ok: false, error: "Proxy internal error" }), {
       status: 500,
-      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      headers: { ...corsHeaders(), "Content-Type": "application/json", Connection: "close" },
     });
   }
 });

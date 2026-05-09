@@ -6,8 +6,14 @@ const DEFAULT_SETTINGS = {
   available_to: "loggedin",
 };
 
-/** Client-side ceiling so the Ask button cannot spin forever if the relay/worker hangs. */
-const FUNCTIONS_INVOKE_TIMEOUT_MS = 62000;
+const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || "https://qbhhgspznslxykmrkacx.supabase.co").replace(/\/$/, "");
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
+
+/** Full round-trip ceiling (Safari-compatible; does not rely only on SDK internals). */
+const AI_FETCH_DEADLINE_MS = 65000;
+
+/** Prevent hanging forever on stalled JSON streams (Safari has seen rare stalls). */
+const RESPONSE_JSON_DEADLINE_MS = 45000;
 
 function parseAiJson(raw) {
   const trimmed = String(raw || "").trim();
@@ -44,34 +50,20 @@ function sanitizeFilters(obj) {
   return Object.keys(shape).length ? shape : null;
 }
 
-async function formatFunctionsError(error) {
-  const name = error?.name ?? "";
-  let msg =
-    typeof error?.message === "string" && error.message.trim().length ? error.message : "AI request failed. Try again.";
-
-  if (name === "FunctionsFetchError" || /abort/i.test(msg)) {
-    return "Request timed out. Try again.";
-  }
-
-  /** @type {{ ok?: boolean; error?: unknown; message?: string } | null} */
-  let parsed = null;
-  if (name === "FunctionsHttpError" && error.context && typeof error.context.json === "function") {
-    try {
-      parsed = await error.context.json();
-    } catch {
-      parsed = null;
-    }
-    if (parsed && typeof parsed === "object") {
-      if ("error" in parsed && parsed.error != null) return String(parsed.error);
-      if (typeof parsed.message === "string") return parsed.message;
-    }
-  }
-
-  if (parsed && parsed.ok === false && parsed.error != null) {
-    return String(parsed.error);
-  }
-
-  return msg;
+function withDeadline(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(label)), ms);
+    promise.then(
+      (v) => {
+        window.clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
 }
 
 function userMayUseAi(settings, user) {
@@ -87,6 +79,79 @@ function userMayUseAi(settings, user) {
     return plan === "pro" || plan === "elite" || plan === "company";
   }
   return false;
+}
+
+/**
+ * Direct Edge Function POST — avoids SDK edge cases where Safari left fetch invocations pending.
+ */
+async function postAiSearch(query, accessToken) {
+  const url = `${SUPABASE_URL}/functions/v1/ai-search`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken || SUPABASE_ANON_KEY}`,
+  };
+
+  const controller = new AbortController();
+  const kill = window.setTimeout(() => controller.abort(), AI_FETCH_DEADLINE_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "omit",
+      headers,
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+
+    const contentType = (response.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+
+    /** @type {unknown} */
+    let parsed;
+    if (contentType.includes("application/json")) {
+      parsed = await withDeadline(response.json(), RESPONSE_JSON_DEADLINE_MS, "json-timeout");
+    } else {
+      const text = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = { ok: false, error: text?.slice?.(0, 200) || `HTTP ${response.status}` };
+      }
+    }
+
+    if (!response.ok) {
+      const errPayload =
+        parsed && typeof parsed === "object" && parsed !== null && "error" in parsed ? String(parsed.error) : "";
+      return {
+        ok: false,
+        message: errPayload || `Request failed (${response.status})`,
+        data: null,
+      };
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      return { ok: false, message: "Unexpected response from AI service.", data: null };
+    }
+
+    /** @type {Record<string, unknown>} */
+    const data = /** @type {Record<string, unknown>} */ (parsed);
+    if (data.ok === false && data.error != null) {
+      return { ok: false, message: String(data.error), data: null };
+    }
+
+    return { ok: true, message: "", data };
+  } catch (e) {
+    const aborted =
+      controller.signal.aborted ||
+      (typeof e === "object" && e !== null && "name" in e && (e).name === "AbortError");
+    if (aborted || (e instanceof Error && (e.message === "json-timeout" || e.message === "text-timeout"))) {
+      return { ok: false, message: "Request timed out. Try again.", data: null };
+    }
+    return { ok: false, message: e instanceof Error ? e.message : "Network error.", data: null };
+  } finally {
+    window.clearTimeout(kill);
+  }
 }
 
 export function useAI(user) {
@@ -157,36 +222,28 @@ export function useAI(user) {
         return;
       }
 
+      if (!SUPABASE_ANON_KEY.trim() || SUPABASE_ANON_KEY === "missing-anon-key-local-dev") {
+        setAssistantNote("App misconfigured (missing REACT_APP_SUPABASE_ANON_KEY).");
+        return;
+      }
+
       setLoading(true);
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token ?? null;
+        let accessToken = null;
+        try {
+          const sessionResult = await withDeadline(supabase.auth.getSession(), 5000, "session-timeout");
+          accessToken = sessionResult?.data?.session?.access_token ?? null;
+        } catch {
+          accessToken = null;
+        }
 
-        const { data, error } = await supabase.functions.invoke("ai-search", {
-          body: { query: trimmed },
-          timeout: FUNCTIONS_INVOKE_TIMEOUT_MS,
-          headers: accessToken
-            ? {
-                Authorization: `Bearer ${accessToken}`,
-              }
-            : {},
-        });
-
-        if (error) {
-          setAssistantNote(await formatFunctionsError(error));
+        const result = await postAiSearch(trimmed, accessToken);
+        if (!result.ok || !result.data) {
+          setAssistantNote(result.message || "AI request failed. Try again.");
           return;
         }
 
-        if (!data || typeof data !== "object") {
-          setAssistantNote("Unexpected response from AI service.");
-          return;
-        }
-
-        if (data.ok === false && data.error) {
-          setAssistantNote(String(data.error));
-          return;
-        }
-
+        const data = result.data;
         const text = typeof data.text === "string" ? data.text : "{}";
 
         const parsed = sanitizeFilters(parseAiJson(text));
@@ -199,7 +256,7 @@ export function useAI(user) {
         setFilters(parsed);
         setBannerQuery(trimmed);
       } catch (err) {
-        setAssistantNote(await formatFunctionsError(err));
+        setAssistantNote(err instanceof Error ? err.message : "Network error.");
       } finally {
         setLoading(false);
       }
