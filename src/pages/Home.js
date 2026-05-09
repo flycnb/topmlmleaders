@@ -94,13 +94,20 @@ function Home({
 
   useEffect(() => {
     let canceled = false;
+    const QUERY_TIMEOUT_MS = 10000;
     async function loadMembers() {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        const membersQuery = supabase
           .from("members")
           .select("*")
           .order("follower_count", { ascending: false, nullsFirst: false });
+        const timeoutPromise = new Promise((resolve) => {
+          window.setTimeout(() => {
+            resolve({ data: null, error: { message: "members query timeout" } });
+          }, QUERY_TIMEOUT_MS);
+        });
+        const { data, error } = await Promise.race([membersQuery, timeoutPromise]);
         if (canceled) return;
         if (error || !data?.length) {
           setMembers(sortMembers(FALLBACK_MEMBERS));
