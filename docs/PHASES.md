@@ -157,23 +157,23 @@ Tasks:
 
 ## PHASE 7 — AI Search Assistant
 **Goal:** AI brain that understands natural language search
-**Status:** 🔲 Todo
+**Status:** ✅ Complete
 
 Tasks:
-- [ ] AI button (🧠) next to search
-- [ ] Slide-down AI panel
-- [ ] Text input
-- [ ] Voice input (Web Speech API)
-- [ ] Call Claude API with search query
-- [ ] Parse JSON response → apply filters
-- [ ] Show "AI filtered results for: [query]"
-- [ ] Admin setting to control AI (provider + availability)
+- [x] AI button (🧠) next to search (hidden when unavailable)
+- [x] Slide-down AI panel
+- [x] Text input
+- [x] Voice input (Web Speech API)
+- [x] Call Claude API with search query
+- [x] Parse JSON response → apply filters
+- [x] Show "🧠 AI filtered: [query]" banner + clear
+- [x] Admin setting to control AI (provider + availability) via `ai_settings`
 
 **Acceptance:**
 1. "Find diamond leaders in Mumbai" returns correct results
 2. Voice input works on Chrome
 3. Admin can turn AI off
-4. Graceful fallback if API fails
+4. Graceful fallback if API fails / key missing / empty filters message
 
 ---
 
@@ -230,3 +230,4 @@ Tasks:
 
 ## COMPLETED PHASES
 - Phase 1 — Project Setup & Structure
+- Phase 7 — AI Search Assistant

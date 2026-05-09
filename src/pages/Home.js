@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
 import { applyMemberSearch, mapMembers, SEARCH_FILTERS } from "../features/search";
 import { useNotifications } from "../features/notifications/useNotifications";
+import AISearchAssistant from "../features/ai-search";
+import { useAI } from "../features/ai-search/useAI";
 
 const FALLBACK_MEMBERS = [
   { id: "f-1", name: "Rajnish Kumar", city: "Mumbai", country: "India", company: "Herbalife", role: "Diamond Leader", plan: "elite", yearsExp: 15, followerCount: 1240, color: "#6C63FF", initials: "RK", rating: 4.9, reviews: 124, wa: "919876500001", waVisibility: "public", verified: true, slots: 3 },
@@ -13,6 +15,27 @@ const FALLBACK_MEMBERS = [
   { id: "f-5", name: "Amit Patel", city: "Ahmedabad", country: "India", company: "Forever Living", role: "Senior Manager", plan: "free", yearsExp: 8, followerCount: 420, color: "#1D9E75", initials: "AP", rating: 4.2, reviews: 56, wa: "919714000002", waVisibility: "private", verified: false, slots: 0 },
   { id: "f-6", name: "Deepa Nair", city: "Chennai", country: "India", company: "Vestige", role: "Director", plan: "free", yearsExp: 6, followerCount: 380, color: "#993C1D", initials: "DN", rating: 4.3, reviews: 67, wa: "919000000006", waVisibility: "private", verified: false, slots: 0 },
 ];
+
+function applyAiFiltersToMembers(memberList, f) {
+  if (!f || typeof f !== "object" || Object.keys(f).length === 0) return memberList;
+
+  function includesIc(hay, needle) {
+    return String(hay || "")
+      .toLowerCase()
+      .includes(String(needle || "").toLowerCase());
+  }
+
+  return memberList.filter((m) => {
+    if (f.name != null && f.name !== "" && !includesIc(m.name, f.name)) return false;
+    if (f.city != null && f.city !== "" && !includesIc(m.city, f.city)) return false;
+    if (f.country != null && f.country !== "" && !includesIc(m.country, f.country)) return false;
+    if (f.company != null && f.company !== "" && !includesIc(m.company, f.company)) return false;
+    if (f.role != null && f.role !== "" && !includesIc(m.role, f.role)) return false;
+    if (f.min_years_exp != null && !(Number(m.yearsExp || 0) >= Number(f.min_years_exp))) return false;
+    if (f.plan != null && f.plan !== "" && String(m.plan) !== String(f.plan)) return false;
+    return true;
+  });
+}
 
 function sortMembers(members) {
   const rank = { elite: 1, pro: 2, company: 3, free: 4 };
@@ -72,6 +95,18 @@ function Home({
     markOneRead,
     loading: notificationsLoading,
   } = useNotifications(user);
+
+  const [showAiPanel, setShowAiPanel] = useState(false);
+
+  const {
+    ask,
+    loading: aiAskLoading,
+    available: aiAvailable,
+    filters: aiFilters,
+    clearAiFilters,
+    bannerQuery: aiBannerQuery,
+    assistantNote: aiAssistNote,
+  } = useAI(user);
 
   function handleLogout() {
     flushSync(() => {
@@ -142,10 +177,16 @@ function Home({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const filteredMembers = useMemo(
+  const filteredMembersFromSearch = useMemo(
     () => applyMemberSearch(members, searchTerm, activeFilter, null),
     [members, searchTerm, activeFilter]
   );
+
+  const filteredMembers = useMemo(
+    () => applyAiFiltersToMembers(filteredMembersFromSearch, aiFilters),
+    [filteredMembersFromSearch, aiFilters]
+  );
+
   const visibleMembers = useMemo(() => filteredMembers.slice(0, visibleCount), [filteredMembers, visibleCount]);
 
   useEffect(() => {
@@ -160,7 +201,11 @@ function Home({
 
   useEffect(() => {
     setVisibleCount(12);
-  }, [searchTerm, activeFilter]);
+  }, [searchTerm, activeFilter, aiFilters]);
+
+  useEffect(() => {
+    if (!aiAvailable) setShowAiPanel(false);
+  }, [aiAvailable]);
 
   useEffect(() => {
     function handleOutsideClick(event) {
@@ -207,9 +252,19 @@ function Home({
               placeholder="Search by name, city, company, role, country..."
               style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "Inter, sans-serif" }}
             />
-            <button type="button" style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 11px", cursor: "pointer" }}>🧠</button>
+            {aiAvailable ? (
+              <button
+                type="button"
+                aria-expanded={showAiPanel}
+                onClick={() => setShowAiPanel((prev) => !prev)}
+                style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 11px", cursor: "pointer" }}
+              >
+                🧠
+              </button>
+            ) : null}
             <button type="button" style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 14px", cursor: "pointer" }}>Search</button>
           </div>
+          <AISearchAssistant open={showAiPanel} ask={ask} loading={aiAskLoading} assistantNote={aiAssistNote} />
           <div className="no-scrollbar" style={{ marginTop: 12, display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
             {SEARCH_FILTERS.map((filter) => {
               const isActive = activeFilter === filter;
@@ -238,6 +293,45 @@ function Home({
         </section>
 
         <section style={{ padding: "18px 16px 24px" }}>
+          {aiBannerQuery ? (
+            <div
+              className="fade-in"
+              style={{
+                marginBottom: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                background: "#F5F3FF",
+                border: "1px solid rgba(79,70,229,0.35)",
+                borderRadius: 12,
+                padding: "10px 12px",
+                fontSize: 14,
+                color: "var(--color-text)",
+              }}
+            >
+              <span style={{ flex: 1, fontWeight: 600 }}>🧠 AI filtered: {aiBannerQuery}</span>
+              <button
+                type="button"
+                aria-label="Clear AI filter"
+                onClick={() => clearAiFilters()}
+                style={{
+                  border: "none",
+                  borderRadius: 999,
+                  background: "#FFFFFF",
+                  color: "var(--color-muted)",
+                  width: 32,
+                  height: 32,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <strong style={{ fontSize: 15, color: "var(--color-text)" }}>
               {isLoading ? "Loading leaders…" : `${filteredMembers.length} leaders found`}
@@ -255,9 +349,20 @@ function Home({
               <div style={{ fontSize: 44 }}>🔍</div>
               <h3 style={{ margin: "10px 0 6px" }}>No leaders found</h3>
               <p style={{ margin: 0, color: "var(--color-muted)" }}>Try a different search term</p>
-              <button type="button" onClick={() => setSearchTerm("")} style={{ marginTop: 16, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "9px 16px", cursor: "pointer" }}>
-                Clear search
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                <button type="button" onClick={() => setSearchTerm("")} style={{ marginTop: 16, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "9px 16px", cursor: "pointer" }}>
+                  Clear search
+                </button>
+                {aiFilters && Object.keys(aiFilters).length ? (
+                  <button
+                    type="button"
+                    onClick={() => clearAiFilters()}
+                    style={{ marginTop: 16, border: "1px solid var(--color-border)", borderRadius: 999, background: "#FFFFFF", fontWeight: 700, padding: "9px 16px", cursor: "pointer" }}
+                  >
+                    Clear AI filter
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : (
             <>
