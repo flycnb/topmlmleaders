@@ -18,6 +18,14 @@ function mapUser(session, plan = "free") {
 const SESSION_FALLBACK_MS = 400;
 /** Global signOut() can hang on some networks/browsers — we always finish with local cleanup. */
 const SIGN_OUT_TIMEOUT_MS = 8000;
+const LOCAL_SIGN_OUT_TIMEOUT_MS = 3000;
+
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => window.setTimeout(resolve, timeoutMs)),
+  ]);
+}
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -122,15 +130,15 @@ export function useAuth() {
   async function signOut() {
     setSigningOut(true);
     try {
-      await Promise.race([
-        supabase.auth.signOut({ scope: "global" }),
-        new Promise((resolve) => window.setTimeout(resolve, SIGN_OUT_TIMEOUT_MS)),
-      ]);
+      await withTimeout(supabase.auth.signOut({ scope: "global" }), SIGN_OUT_TIMEOUT_MS);
     } catch {
       /* remote sign-out failed — continue with local cleanup */
     } finally {
       try {
-        await supabase.auth.signOut({ scope: "local" });
+        await withTimeout(
+          supabase.auth.signOut({ scope: "local" }),
+          LOCAL_SIGN_OUT_TIMEOUT_MS
+        );
       } catch {
         /* ignore */
       }
