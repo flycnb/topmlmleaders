@@ -6,14 +6,6 @@ const DEFAULT_SETTINGS = {
   available_to: "loggedin",
 };
 
-const SYSTEM_PROMPT = `You are a search assistant for TopMLMLeaders.com, a global MLM leaders directory.
-Extract search filters from the user query and return ONLY a valid JSON object.
-No explanation, no markdown, just raw JSON.
-Available fields: { name, city, country, company, role, min_years_exp, plan }
-plan values: free, pro, elite, company
-Example output: {"city":"Mumbai","min_years_exp":5}
-If no filters found: return {}`;
-
 function parseAiJson(raw) {
   const trimmed = String(raw || "").trim();
   try {
@@ -132,46 +124,28 @@ export function useAI(user) {
         return;
       }
 
-      const apiKey = process.env.REACT_APP_ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        setAssistantNote("AI is not configured. Add REACT_APP_ANTHROPIC_API_KEY.");
-        return;
-      }
-
       setLoading(true);
       try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 500,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: "user", content: trimmed }],
-          }),
+        const { data, error } = await supabase.functions.invoke("ai-search", {
+          body: { query: trimmed },
         });
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const msg =
-            data?.error?.message ||
-            (typeof data === "string" ? data : "") ||
-            "AI request failed. Try again.";
-          setAssistantNote(msg);
+        if (error) {
+          setAssistantNote(error.message || "AI request failed. Try again.");
           return;
         }
 
-        const text =
-          Array.isArray(data?.content)
-            ? data.content
-                .filter((block) => block?.type === "text" && typeof block.text === "string")
-                .map((block) => block.text)
-                .join("") || "{}"
-            : "{}";
+        if (!data || typeof data !== "object") {
+          setAssistantNote("Unexpected response from AI service.");
+          return;
+        }
+
+        if (data.ok === false && data.error) {
+          setAssistantNote(String(data.error));
+          return;
+        }
+
+        const text = typeof data.text === "string" ? data.text : "{}";
 
         const parsed = sanitizeFilters(parseAiJson(text));
         if (!parsed || Object.keys(parsed).length === 0) {
