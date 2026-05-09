@@ -9,6 +9,20 @@ const SLOT_DAYS = [
   { label: "Tomorrow", slots: [{ id: "n1", time: "4:00 PM", type: "WA Video", booked: false }, { id: "n2", time: "7:00 PM", type: "In-Person", booked: false }] },
 ];
 
+function normalizeMember(member) {
+  if (!member) return null;
+  return {
+    ...member,
+    ownerId: member.ownerId || member.owner_id || "",
+    avatarUrl: member.avatarUrl || member.avatar_url || "",
+    initials: member.initials || member.photo_initials || "ML",
+    followerCount: Number(member.followerCount ?? member.follower_count ?? 0),
+    youtubeUrl: member.youtubeUrl || member.youtube_url || "",
+    phoneVisibility: member.phoneVisibility || member.phone_visibility || "private",
+    waVisibility: member.waVisibility || member.wa_visibility || "private",
+  };
+}
+
 function card(title, body) {
   return (
     <section style={{ background: "#FFFFFF", borderRadius: 14, boxShadow: "var(--shadow-card)", padding: 14, marginBottom: 12 }}>
@@ -19,13 +33,13 @@ function card(title, body) {
 }
 
 function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow, onOpenChat, onBack }) {
-  const [liveMember, setLiveMember] = useState(member || {});
+  const [liveMember, setLiveMember] = useState(normalizeMember(member) || {});
   const [activeTab, setActiveTab] = useState("about");
   const [showShare, setShowShare] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  const [followers, setFollowers] = useState(Number(member?.followerCount || 0));
+  const [followers, setFollowers] = useState(Number(member?.followerCount ?? member?.follower_count ?? 0));
   const [uploading, setUploading] = useState(false);
-  const [youtubeInput, setYoutubeInput] = useState(member?.youtubeUrl || "");
+  const [youtubeInput, setYoutubeInput] = useState(member?.youtubeUrl || member?.youtube_url || "");
   const [joinForm, setJoinForm] = useState({ name: "", wa: "", city: "", experience: "No experience" });
   const [joinStatus, setJoinStatus] = useState("");
   const [activeDay, setActiveDay] = useState(0);
@@ -37,9 +51,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const fileRef = useRef(null);
 
   useEffect(() => {
-    setLiveMember(member || {});
-    setFollowers(Number(member?.followerCount || 0));
-    setYoutubeInput(member?.youtubeUrl || "");
+    const normalized = normalizeMember(member) || {};
+    setLiveMember(normalized);
+    setFollowers(Number(normalized.followerCount || 0));
+    setYoutubeInput(normalized.youtubeUrl || "");
   }, [member]);
   useEffect(() => setBookingName(user?.name || ""), [user?.name]);
 
