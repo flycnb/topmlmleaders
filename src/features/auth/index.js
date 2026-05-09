@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabaseClient";
 import { signInWithEmailPassword, signUpWithEmail } from "./useAuth";
 
 function GoogleIcon() {
@@ -20,6 +21,7 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
   const [emailError, setEmailError] = useState("");
   const [emailSuccess, setEmailSuccess] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [forgotSending, setForgotSending] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -29,6 +31,7 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
       setPassword("");
       setEmailError("");
       setEmailSuccess("");
+      setForgotSending(false);
     }
   }, [open]);
 
@@ -66,6 +69,32 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
       }
     } finally {
       setEmailSubmitting(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    const entered = window.prompt("Enter the email address for your account:", email.trim());
+    if (entered === null) return;
+    const addr = entered.trim();
+    if (!addr) {
+      setEmailError("Enter a valid email.");
+      setEmailSuccess("");
+      return;
+    }
+    setEmailError("");
+    setEmailSuccess("");
+    setForgotSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(addr, {
+        redirectTo: window.location.origin,
+      });
+      if (error) {
+        setEmailError(error.message || "Could not send reset email.");
+        return;
+      }
+      setEmailSuccess("Reset link sent to your email!");
+    } finally {
+      setForgotSending(false);
     }
   }
 
@@ -211,6 +240,27 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
                 fontSize: 15,
               }}
             />
+            {emailMode === "login" ? (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={forgotSending || emailSubmitting}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    color: "var(--color-primary)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: forgotSending || emailSubmitting ? "default" : "pointer",
+                    padding: 0,
+                    opacity: forgotSending || emailSubmitting ? 0.7 : 1,
+                  }}
+                >
+                  {forgotSending ? "Sending…" : "Forgot Password?"}
+                </button>
+              </div>
+            ) : null}
             {emailError ? (
               <p style={{ margin: "0 0 10px", fontSize: 13, color: "#DC2626" }}>{emailError}</p>
             ) : null}
@@ -323,6 +373,9 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
               {loading ? <span className="spinner">⏳</span> : <GoogleIcon />}
               {loading ? "Redirecting..." : "Continue with Google"}
             </button>
+            <p style={{ margin: "12px 0 0", textAlign: "center", fontSize: 12, color: "var(--color-muted)", lineHeight: 1.45 }}>
+              Note: If Google login gets stuck, please use Email login instead.
+            </p>
           </>
         )}
 
