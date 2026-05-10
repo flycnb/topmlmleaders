@@ -1,6 +1,6 @@
 # 📊 PHASES — TopMLMLeaders.com Build Plan
 
-Last updated: May 2026 (TICKET-010: Leaderboard, Opportunity Board, Plans pages)
+Last updated: May 2026 (TICKET-011: Dashboard Media tab — gallery + YouTube URLs)
 
 ---
 
@@ -139,6 +139,7 @@ Tasks:
 - [x] Stats row (Followers, Messages, Bookmarks, Alerts) — clickable
 - [x] Overview tab (activity feed, profile summary)
 - [x] Profile tab (edit all fields, upload photo, YouTube, QR)
+- [x] Media tab (gallery uploads → `gallery_urls`, YouTube links → `youtube_urls`) — TICKET-011
 - [x] Messages tab (conversation list)
 - [x] Bookmarks tab (search + list + remove)
 - [x] Bookings tab (incoming + outgoing)

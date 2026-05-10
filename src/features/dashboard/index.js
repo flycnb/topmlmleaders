@@ -3,15 +3,27 @@ import { QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../../lib/supabaseClient";
 import { useNotifications } from "../notifications/useNotifications";
 
+/*
+ * TICKET-011 — Run in Supabase SQL Editor once if columns/bucket missing:
+ *
+ * ALTER TABLE members ADD COLUMN IF NOT EXISTS gallery_urls jsonb DEFAULT '[]';
+ * ALTER TABLE members ADD COLUMN IF NOT EXISTS youtube_urls jsonb DEFAULT '[]';
+ *
+ * Storage: create public bucket "gallery" (public read). Upload path: [member-id]/[timestamp].[ext]
+ */
+
 const TABS = [
   "overview",
   "profile",
+  "media",
   "messages",
   "bookmarks",
   "bookings",
   "settings",
   "refer & earn",
 ];
+
+const MAX_GALLERY_PHOTOS = 10;
 
 function timeAgo(value) {
   if (!value) return "";
@@ -31,6 +43,29 @@ function slugify(text) {
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-");
+}
+
+/** Parse YouTube watch/embed/shorts URLs for thumbnail preview. */
+function extractYoutubeVideoId(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  try {
+    const normalized = s.includes("://") ? s : `https://${s}`;
+    const u = new URL(normalized);
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.replace(/^\//, "").split("/")[0];
+      return id || null;
+    }
+    if (u.hostname.includes("youtube.com")) {
+      const v = u.searchParams.get("v");
+      if (v) return v;
+      const embed = u.pathname.match(/\/(embed|live|shorts|v)\/([^/?]+)/);
+      if (embed) return embed[2];
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 function Dashboard({
@@ -79,7 +114,13 @@ function Dashboard({
     youtubeUrl: "",
   });
   const fileRef = useRef(null);
+  const galleryInputRef = useRef(null);
   const qrId = "dashboard-profile-qr";
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [youtubeInputs, setYoutubeInputs] = useState(["", "", ""]);
+  const [youtubeVideosStatus, setYoutubeVideosStatus] = useState("");
+  const [savingYoutubeVideos, setSavingYoutubeVideos] = useState(false);
+  const [mediaGalleryStatus, setMediaGalleryStatus] = useState("");
 
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
@@ -88,6 +129,19 @@ function Dashboard({
     const slug = myMember?.slug || slugify(profileForm.name || user?.name);
     return `https://topmlmleaders.com/${slug}`;
   }, [myMember?.slug, profileForm.name, user?.name]);
+
+  useEffect(() => {
+    const raw = myMember?.youtube_urls;
+    if (!Array.isArray(raw)) {
+      setYoutubeInputs(["", "", ""]);
+      return;
+    }
+    setYoutubeInputs([
+      String(raw[0] ?? "").trim(),
+      String(raw[1] ?? "").trim(),
+      String(raw[2] ?? "").trim(),
+    ]);
+  }, [myMember?.id, myMember?.youtube_urls]);
 
   useEffect(() => {
     if (authInitializing) return undefined;
@@ -343,6 +397,126 @@ function Dashboard({
       setSaveStatus(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function uploadGalleryPhoto(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (input) input.value = "";
+    if (!file || !user?.id) return;
+
+    setGalleryUploading(true);
+    setMediaGalleryStatus("");
+    try {
+      let memberId = myMember?.id;
+      if (!memberId) {
+        const insertPayload = {
+          ...getMemberPayload(),
+          created_at: new Date().toISOString(),
+        };
+        const created = await supabase.from("members").insert(insertPayload).select("*");
+        if (created.error || !created.data?.[0]) {
+          setMediaGalleryStatus(
+            created.error
+              ? `Could not create profile: ${created.error.message}`
+              : "Could not create profile. Save your profile on the Profile tab first."
+          );
+          return;
+        }
+        setMyMember(created.data[0]);
+        memberId = created.data[0].id;
+      }
+
+      const existing = Array.isArray(myMember?.gallery_urls)
+        ? myMember.gallery_urls.filter((u) => typeof u === "string" && u.trim())
+        : [];
+      if (existing.length >= MAX_GALLERY_PHOTOS) {
+        setMediaGalleryStatus(`Maximum ${MAX_GALLERY_PHOTOS} photos. Delete one to add another.`);
+        return;
+      }
+
+      const rawExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      const path = `${memberId}/${Date.now()}.${ext}`;
+      const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("gallery")
+        .upload(path, file, { upsert: false, cacheControl: "3600", contentType });
+
+      if (uploadError) {
+        setMediaGalleryStatus(`Upload failed: ${uploadError.message}`);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("gallery").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      const nextGallery = [...existing, publicUrl].slice(0, MAX_GALLERY_PHOTOS);
+
+      const { error: dbError } = await supabase
+        .from("members")
+        .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
+        .eq("id", memberId);
+
+      if (dbError) {
+        setMediaGalleryStatus(`Photo uploaded but not saved: ${dbError.message}`);
+        return;
+      }
+      setMyMember((prev) => ({ ...prev, gallery_urls: nextGallery }));
+      setMediaGalleryStatus("");
+    } catch (e) {
+      setMediaGalleryStatus(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setGalleryUploading(false);
+    }
+  }
+
+  async function deleteGalleryPhoto(url) {
+    if (!myMember?.id || !url) return;
+    setMediaGalleryStatus("");
+    const existing = Array.isArray(myMember.gallery_urls)
+      ? myMember.gallery_urls.filter((u) => typeof u === "string")
+      : [];
+    const nextGallery = existing.filter((u) => u !== url);
+    const { error } = await supabase
+      .from("members")
+      .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
+      .eq("id", myMember.id);
+    if (error) {
+      setMediaGalleryStatus(error.message || "Could not remove photo.");
+      return;
+    }
+    setMyMember((prev) => (prev ? { ...prev, gallery_urls: nextGallery } : prev));
+  }
+
+  async function saveYoutubeVideos() {
+    if (!myMember?.id) {
+      setYoutubeVideosStatus("Save your profile on the Profile tab first.");
+      return;
+    }
+    setSavingYoutubeVideos(true);
+    setYoutubeVideosStatus("");
+    try {
+      const youtube_urls = [
+        youtubeInputs[0]?.trim() || "",
+        youtubeInputs[1]?.trim() || "",
+        youtubeInputs[2]?.trim() || "",
+      ];
+      const { error } = await supabase
+        .from("members")
+        .update({ youtube_urls, updated_at: new Date().toISOString() })
+        .eq("id", myMember.id);
+      if (error) {
+        setYoutubeVideosStatus(error.message || "Could not save videos.");
+        return;
+      }
+      setMyMember((prev) => (prev ? { ...prev, youtube_urls } : prev));
+      setYoutubeVideosStatus("✅ Videos saved!");
+    } catch (e) {
+      setYoutubeVideosStatus(e instanceof Error ? e.message : "Could not save videos.");
+    } finally {
+      setSavingYoutubeVideos(false);
     }
   }
 
@@ -687,6 +861,173 @@ function Dashboard({
     );
   }
 
+  function renderMedia() {
+    const galleryUrls = Array.isArray(myMember?.gallery_urls)
+      ? myMember.gallery_urls.filter((u) => typeof u === "string" && u.trim())
+      : [];
+    const atLimit = galleryUrls.length >= MAX_GALLERY_PHOTOS;
+
+    return (
+      <div style={{ display: "grid", gap: 16 }}>
+        <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>📸 Gallery Photos</h3>
+          <p style={{ margin: "0 0 12px", color: "var(--color-muted)", fontSize: 14 }}>
+            Add photos to showcase on your profile
+          </p>
+          {mediaGalleryStatus ? (
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: "#DC2626" }}>{mediaGalleryStatus}</p>
+          ) : null}
+          {galleryUrls.length === 0 ? (
+            <p style={{ color: "var(--color-muted)", marginBottom: 12 }}>No photos yet. Upload your first photo!</p>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {galleryUrls.map((url) => (
+                <div
+                  key={url}
+                  style={{
+                    position: "relative",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    border: "1px solid var(--color-border)",
+                    aspectRatio: "1",
+                  }}
+                >
+                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <button
+                    type="button"
+                    aria-label="Remove photo"
+                    onClick={() => deleteGalleryPhoto(url)}
+                    style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      border: "none",
+                      background: "rgba(0,0,0,0.55)",
+                      color: "#FFFFFF",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      lineHeight: 1,
+                      fontSize: 18,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={uploadGalleryPhoto}
+          />
+          <button
+            type="button"
+            disabled={galleryUploading || atLimit}
+            onClick={() => galleryInputRef.current?.click()}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              background: galleryUploading || atLimit ? "#D1D5DB" : "var(--color-primary)",
+              color: "#FFFFFF",
+              padding: "10px 14px",
+              fontWeight: 700,
+              cursor: galleryUploading || atLimit ? "default" : "pointer",
+            }}
+          >
+            {galleryUploading ? "Uploading..." : "Upload Photo"}
+          </button>
+        </section>
+
+        <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>🎥 YouTube Videos</h3>
+          <p style={{ margin: "0 0 12px", color: "var(--color-muted)", fontSize: 14 }}>
+            Add up to 3 YouTube video links
+          </p>
+          {[0, 1, 2].map((index) => {
+            const vid = extractYoutubeVideoId(youtubeInputs[index]);
+            return (
+              <div key={index} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{`Video ${index + 1}`}</div>
+                <input
+                  value={youtubeInputs[index]}
+                  onChange={(event) => {
+                    const next = [...youtubeInputs];
+                    next[index] = event.target.value;
+                    setYoutubeInputs(next);
+                  }}
+                  placeholder="YouTube URL..."
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    boxSizing: "border-box",
+                  }}
+                />
+                {vid ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  >
+                    <img
+                      src={`https://img.youtube.com/vi/${vid}/mqdefault.jpg`}
+                      alt=""
+                      style={{ width: "100%", display: "block", maxHeight: 180, objectFit: "cover" }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={saveYoutubeVideos}
+            disabled={savingYoutubeVideos}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              background: savingYoutubeVideos ? "#D1D5DB" : "var(--color-primary)",
+              color: "#FFFFFF",
+              padding: "10px 14px",
+              fontWeight: 700,
+              cursor: savingYoutubeVideos ? "default" : "pointer",
+            }}
+          >
+            {savingYoutubeVideos ? "Saving..." : "Save Videos"}
+          </button>
+          {youtubeVideosStatus ? (
+            <p
+              style={{
+                margin: "10px 0 0",
+                fontSize: 13,
+                color: youtubeVideosStatus.startsWith("✅") ? "#059669" : "#DC2626",
+              }}
+            >
+              {youtubeVideosStatus}
+            </p>
+          ) : null}
+        </section>
+      </div>
+    );
+  }
+
   function renderMessages() {
     return (
       <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
@@ -948,6 +1289,7 @@ function Dashboard({
     if (loading) return <p style={{ color: "var(--color-muted)" }}>Loading dashboard...</p>;
     if (activeTab === "overview") return renderOverview();
     if (activeTab === "profile") return renderProfile();
+    if (activeTab === "media") return renderMedia();
     if (activeTab === "messages") return renderMessages();
     if (activeTab === "bookmarks") return renderBookmarks();
     if (activeTab === "bookings") return renderBookings();
