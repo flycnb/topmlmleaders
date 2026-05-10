@@ -249,7 +249,6 @@ function Dashboard({
       phone_visibility: profileForm.phoneVisibility,
       wa_visibility: profileForm.waVisibility,
       description: profileForm.description,
-      years_exp: Number(profileForm.yearsExp || 0),
       team_size: profileForm.teamSize,
       earnings: profileForm.earnings,
       youtube_url: profileForm.youtubeUrl,
