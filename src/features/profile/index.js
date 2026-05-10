@@ -4,6 +4,9 @@ import ShareSheet from "../../components/ShareSheet";
 import QRCodeModal from "../../components/QRCode";
 
 const TABS = ["about", "gallery", "services", "events", "join us", "team", "book"];
+
+/** Must match bucket id in Supabase Dashboard → Storage (this project uses AVTARS). */
+const AVATAR_STORAGE_BUCKET = "AVTARS";
 const SLOT_DAYS = [
   { label: "Today", slots: [{ id: "t1", time: "6:00 PM", type: "Call", booked: false }, { id: "t2", time: "8:00 PM", type: "WA Video", booked: true }] },
   { label: "Tomorrow", slots: [{ id: "n1", time: "4:00 PM", type: "WA Video", booked: false }, { id: "n2", time: "7:00 PM", type: "In-Person", booked: false }] },
@@ -145,7 +148,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     const input = event.target;
     const file = input.files?.[0];
     if (input) input.value = "";
-    if (!file || !canEdit || !liveMember.id) return;
+    if (!file || !canEdit || !liveMember.id || !user?.id) return;
     setAvatarUploadStatus("");
     setUploading(true);
     try {
@@ -154,18 +157,19 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       const path = `${liveMember.id}-${Date.now()}.${ext}`;
       const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
       const { error: uploadError } = await supabase.storage
-        .from("avatars")
+        .from(AVATAR_STORAGE_BUCKET)
         .upload(path, file, { upsert: true, cacheControl: "3600", contentType });
       if (uploadError) {
         console.error("[TICKET-003 avatar] storage upload failed", uploadError);
         setAvatarUploadStatus(`Photo upload failed: ${uploadError.message}`);
         return;
       }
-      const publicUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+      const publicUrl = supabase.storage.from(AVATAR_STORAGE_BUCKET).getPublicUrl(path).data.publicUrl;
       const { error: dbError } = await supabase
         .from("members")
-        .update({ avatar_url: publicUrl })
-        .eq("id", liveMember.id);
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq("id", liveMember.id)
+        .eq("owner_id", user.id);
       if (dbError) {
         console.error("[TICKET-003 avatar] members update failed", dbError);
         setAvatarUploadStatus(`Photo uploaded but not saved: ${dbError.message}`);

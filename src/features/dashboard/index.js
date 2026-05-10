@@ -25,6 +25,9 @@ const TABS = [
 
 const MAX_GALLERY_PHOTOS = 10;
 
+/** Must match bucket id in Supabase Dashboard → Storage (this project uses AVTARS). */
+const AVATAR_STORAGE_BUCKET = "AVTARS";
+
 function timeAgo(value) {
   if (!value) return "";
   const time = new Date(value).getTime();
@@ -416,7 +419,9 @@ function Dashboard({
       const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
 
       const { error: uploadError } = await withTimeout(
-        supabase.storage.from("avatars").upload(path, file, { upsert: true, cacheControl: "3600", contentType }),
+        supabase.storage
+          .from(AVATAR_STORAGE_BUCKET)
+          .upload(path, file, { upsert: true, cacheControl: "3600", contentType }),
         120000,
         "Avatar upload"
       );
@@ -426,13 +431,14 @@ function Dashboard({
         return;
       }
 
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from(AVATAR_STORAGE_BUCKET).getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
       const { data: updatedMember, error: dbError } = await withTimeout(
         supabase
           .from("members")
           .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
           .eq("id", memberId)
+          .eq("owner_id", user.id)
           .select("id, avatar_url")
           .maybeSingle(),
         30000,
@@ -521,6 +527,7 @@ function Dashboard({
           .from("members")
           .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
           .eq("id", memberId)
+          .eq("owner_id", user.id)
           .select("id, gallery_urls")
           .maybeSingle(),
         30000,
@@ -554,7 +561,7 @@ function Dashboard({
   }
 
   async function deleteGalleryPhoto(url) {
-    if (!myMember?.id || !url) return;
+    if (!myMember?.id || !user?.id || !url) return;
     setMediaGalleryStatus("");
     const existing = normalizeGalleryUrls(myMember.gallery_urls);
     const nextGallery = existing.filter((u) => u !== url);
@@ -563,6 +570,7 @@ function Dashboard({
         .from("members")
         .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
         .eq("id", myMember.id)
+        .eq("owner_id", user.id)
         .select("gallery_urls")
         .maybeSingle(),
       30000,
@@ -582,7 +590,7 @@ function Dashboard({
   }
 
   async function saveYoutubeVideos() {
-    if (!myMember?.id) {
+    if (!myMember?.id || !user?.id) {
       setYoutubeVideosStatus("Save your profile on the Profile tab first.");
       return;
     }
@@ -594,15 +602,25 @@ function Dashboard({
         youtubeInputs[1]?.trim() || "",
         youtubeInputs[2]?.trim() || "",
       ];
-      const { error } = await supabase
+      const { data: updatedRow, error } = await supabase
         .from("members")
         .update({ youtube_urls, updated_at: new Date().toISOString() })
-        .eq("id", myMember.id);
+        .eq("id", myMember.id)
+        .eq("owner_id", user.id)
+        .select("youtube_urls")
+        .maybeSingle();
       if (error) {
         setYoutubeVideosStatus(error.message || "Could not save videos.");
         return;
       }
-      setMyMember((prev) => (prev ? { ...prev, youtube_urls } : prev));
+      if (!updatedRow) {
+        setYoutubeVideosStatus(
+          "Could not save videos (no matching row or update blocked). Check you are logged in as the profile owner."
+        );
+        return;
+      }
+      const saved = Array.isArray(updatedRow.youtube_urls) ? updatedRow.youtube_urls : youtube_urls;
+      setMyMember((prev) => (prev ? { ...prev, youtube_urls: saved } : prev));
       setYoutubeVideosStatus("✅ Videos saved!");
     } catch (e) {
       setYoutubeVideosStatus(e instanceof Error ? e.message : "Could not save videos.");
