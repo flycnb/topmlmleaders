@@ -13,61 +13,97 @@ export function useChat(user, member) {
 
   useEffect(() => {
     let active = true;
+    let loadTimeoutId = null;
 
     async function setupConversation() {
       if (!user?.id || !member?.ownerId || user.id === member.ownerId) {
         setConversationId(null);
         setMessages([]);
+        setLoading(false);
         return;
       }
 
       setLoading(true);
-      const [member1Id, member2Id] = sortIds(user.id, member.ownerId);
+      loadTimeoutId = window.setTimeout(() => {
+        if (active) {
+          console.warn("[chat] setup exceeded 5s; unlocking UI");
+          setLoading(false);
+        }
+      }, 5000);
 
-      let conversation = null;
-      const existing = await supabase
-        .from("conversations")
-        .select("id, member1_id, member2_id")
-        .eq("member1_id", member1Id)
-        .eq("member2_id", member2Id)
-        .maybeSingle();
+      try {
+        const [member1Id, member2Id] = sortIds(user.id, member.ownerId);
 
-      if (existing.data?.id) {
-        conversation = existing.data;
-      } else {
-        const created = await supabase
+        let conversation = null;
+        const existing = await supabase
           .from("conversations")
-          .insert({
-            member1_id: member1Id,
-            member2_id: member2Id,
-            created_at: new Date().toISOString(),
-          })
           .select("id, member1_id, member2_id")
-          .single();
-        conversation = created.data || null;
-      }
+          .eq("member1_id", member1Id)
+          .eq("member2_id", member2Id)
+          .maybeSingle();
 
-      if (!active || !conversation?.id) {
+        if (!active) return;
+
+        if (existing.error) {
+          console.error("[chat] conversations select failed", existing.error);
+          return;
+        }
+
+        if (existing.data?.id) {
+          conversation = existing.data;
+        } else {
+          const created = await supabase
+            .from("conversations")
+            .insert({
+              member1_id: member1Id,
+              member2_id: member2Id,
+              created_at: new Date().toISOString(),
+            })
+            .select("id, member1_id, member2_id")
+            .single();
+
+          if (!active) return;
+
+          if (created.error) {
+            console.error("[chat] conversations insert failed", created.error);
+            return;
+          }
+          conversation = created.data || null;
+        }
+
+        if (!conversation?.id) return;
+
+        setConversationId(conversation.id);
+
+        const messageRes = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conversation.id)
+          .order("created_at", { ascending: true });
+
+        if (!active) return;
+
+        if (messageRes.error) {
+          console.error("[chat] messages select failed", messageRes.error);
+          return;
+        }
+
+        setMessages(messageRes.data || []);
+      } catch (e) {
+        if (active) console.error("[chat] setupConversation failed", e);
+      } finally {
+        if (loadTimeoutId != null) {
+          window.clearTimeout(loadTimeoutId);
+          loadTimeoutId = null;
+        }
         if (active) setLoading(false);
-        return;
       }
-
-      setConversationId(conversation.id);
-
-      const messageRes = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversation.id)
-        .order("created_at", { ascending: true });
-
-      if (!active) return;
-      setMessages(messageRes.data || []);
-      setLoading(false);
     }
 
     setupConversation();
     return () => {
       active = false;
+      if (loadTimeoutId != null) window.clearTimeout(loadTimeoutId);
     };
   }, [user?.id, member?.ownerId]);
 

@@ -49,6 +49,25 @@ function formatEarningsDisplay(value) {
   return String(value);
 }
 
+/** Normalize `members.gallery_urls` (jsonb array or legacy string) for the Gallery tab. */
+function normalizeGalleryUrls(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((u) => typeof u === "string" && u.trim());
+  }
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u) => typeof u === "string" && u.trim());
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return [];
+}
+
 function normalizeMember(member) {
   if (!member) return null;
   const description =
@@ -124,7 +143,11 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     if (!id) return undefined;
     let canceled = false;
     (async () => {
-      const { data, error } = await supabase.from("members").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase
+        .from("members")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       if (canceled || error || !data) return;
       setLiveMember((prev) => normalizeMember({ ...prev, ...data }) || {});
     })();
@@ -139,7 +162,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const color = liveMember.color || "#6C63FF";
   const phoneAllowed = liveMember.phoneVisibility === "public" || (user && liveMember.phoneVisibility !== "private");
   const waAllowed = liveMember.waVisibility === "public" || (user && liveMember.waVisibility !== "private");
-  const gallery = Array.isArray(liveMember.gallery) ? liveMember.gallery : [];
+  const galleryPhotoUrls = normalizeGalleryUrls(liveMember.gallery_urls);
   const services = Array.isArray(liveMember.services) ? liveMember.services : [];
   const events = Array.isArray(liveMember.events) ? liveMember.events : [];
   const team = Array.isArray(liveMember.team) ? liveMember.team : [];
@@ -379,7 +402,51 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
 
   function renderContent() {
     if (activeTab === "about") return renderAbout();
-    if (activeTab === "gallery") return gallery.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10 }}>{gallery.map((item, index) => <button key={`${item}-${index}`} type="button" onClick={() => setLightbox(item)} style={{ borderRadius: 14, border: "1px solid var(--color-border)", background: "#FFFFFF", padding: 18 }}>📸<div style={{ fontSize: 12, color: "var(--color-muted)" }}>{item}</div></button>)}</div> : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No photos yet</div>;
+    if (activeTab === "gallery") {
+      if (!galleryPhotoUrls.length) {
+        return <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No photos yet</div>;
+      }
+      return (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+          }}
+        >
+          {galleryPhotoUrls.map((url, index) => (
+            <button
+              key={`${url}-${index}`}
+              type="button"
+              onClick={() => setLightbox(url)}
+              style={{
+                position: "relative",
+                width: "100%",
+                padding: 0,
+                border: "1px solid var(--color-border)",
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "#F3F4F6",
+                aspectRatio: "1 / 1",
+                cursor: "pointer",
+                minHeight: 0,
+              }}
+            >
+              <img
+                src={url}
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      );
+    }
     if (activeTab === "services") return services.length ? services.map((item, index) => card(item.name || `Service ${index + 1}`, <div><p style={{ color: "var(--color-muted)" }}>{item.description || "MLM growth support and mentorship."}</p><button type="button" onClick={openWa} style={{ border: "none", borderRadius: 999, background: color, color: "#FFFFFF", padding: "8px 12px", fontWeight: 700 }}>Enquire</button></div>)) : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No services listed yet</div>;
     if (activeTab === "events") return events.length ? events.map((item, index) => card(item.title || `Event ${index + 1}`, <p style={{ margin: 0, color: "var(--color-muted)" }}>{item.date || "Date TBA"} · {item.time || "Time TBA"}</p>)) : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No upcoming events</div>;
     if (activeTab === "join us") return card(`Join ${liveMember.name}'s Team`, <form onSubmit={onJoinSubmit} style={{ display: "grid", gap: 10 }}><input required value={joinForm.name} onChange={(event) => setJoinForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Full Name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><input required value={joinForm.wa} onChange={(event) => setJoinForm((prev) => ({ ...prev, wa: event.target.value }))} placeholder="WhatsApp Number" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><input required value={joinForm.city} onChange={(event) => setJoinForm((prev) => ({ ...prev, city: event.target.value }))} placeholder="Your City" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><select value={joinForm.experience} onChange={(event) => setJoinForm((prev) => ({ ...prev, experience: event.target.value }))} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }}><option>No experience</option><option>1-2 years</option><option>3-5 years</option><option>5+ years</option></select><button type="submit" style={{ border: "none", borderRadius: 12, background: color, color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>Submit</button>{joinStatus ? <p style={{ margin: 0, color: "var(--color-muted)" }}>{joinStatus}</p> : null}</form>);
@@ -495,7 +562,36 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       </footer>
       {showShare ? <ShareSheet open={showShare} onClose={() => setShowShare(false)} member={{ ...liveMember, teamSize: liveMember.teamSize || "-" }} /> : null}
       {showQr ? <QRCodeModal open={showQr} onClose={() => setShowQr(false)} member={liveMember} /> : null}
-      {lightbox ? <div onClick={() => setLightbox("")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.85)", display: "grid", placeItems: "center", color: "#FFFFFF" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 60 }}>📸</div><div>{lightbox}</div></div></div> : null}
+      {lightbox ? (
+        <div
+          role="presentation"
+          onClick={() => setLightbox("")}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.9)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            cursor: "pointer",
+          }}
+        >
+          {/^https?:\/\//i.test(lightbox) ? (
+            <img
+              src={lightbox}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "100%", maxHeight: "90vh", objectFit: "contain", borderRadius: 8, cursor: "default" }}
+            />
+          ) : (
+            <div style={{ textAlign: "center", color: "#FFFFFF" }}>
+              <div style={{ fontSize: 60 }}>📸</div>
+              <div>{lightbox}</div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

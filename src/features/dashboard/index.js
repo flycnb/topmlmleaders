@@ -1008,13 +1008,26 @@ function Dashboard({
                   key={url}
                   style={{
                     position: "relative",
+                    width: "100%",
+                    minHeight: 0,
+                    alignSelf: "stretch",
                     borderRadius: 12,
                     overflow: "hidden",
                     border: "1px solid var(--color-border)",
-                    aspectRatio: "1",
+                    aspectRatio: "1 / 1",
+                    background: "#F3F4F6",
                   }}
                 >
-                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img
+                    src={url}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
                   <button
                     type="button"
                     aria-label="Remove photo"
