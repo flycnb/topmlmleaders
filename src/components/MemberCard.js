@@ -29,8 +29,7 @@ function MemberCard({
       onRequireLogin();
       return;
     }
-    const canSeeWa = member.waVisibility === "public" || isLoggedIn;
-    if (!canSeeWa || !member.wa) return;
+    if (!member.wa) return;
     window.open(`https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`, "_blank", "noopener");
   };
 

@@ -144,13 +144,7 @@ function Home({
           return;
         }
 
-        const mapped = mapMembers(data).map((member, index) => ({
-          ...member,
-          socialFb: Boolean(data[index]?.social_fb),
-          socialIg: Boolean(data[index]?.social_ig),
-          socialYt: Boolean(data[index]?.social_yt),
-          socialLi: Boolean(data[index]?.social_li),
-        }));
+        const mapped = mapMembers(data);
         setMembers(sortMembers(mapped));
       } finally {
         if (!canceled) setIsLoading(false);

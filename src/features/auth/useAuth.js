@@ -14,9 +14,7 @@ function mapUser(session, plan = "free") {
   };
 }
 
-/** Ensures INITIAL_SESSION/PKCE never leaves the app stuck in loading=false with no user while URL exchange runs. */
 const SESSION_FALLBACK_MS = 400;
-/** Global signOut() can hang on some networks/browsers — we always finish with local cleanup. */
 const SIGN_OUT_TIMEOUT_MS = 8000;
 const LOCAL_SIGN_OUT_TIMEOUT_MS = 3000;
 
@@ -27,7 +25,6 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
-/** Standalone helpers for email/password auth (used by AuthModal; same Supabase client as the hook). */
 export async function signInWithEmailPassword(email, password) {
   const trimmed = String(email || "").trim();
   return supabase.auth.signInWithPassword({ email: trimmed, password });
@@ -40,7 +37,6 @@ export async function signUpWithEmail(email, password) {
 
 export function useAuth() {
   const [session, setSession] = useState(null);
-  /** True until first auth hydration (INITIAL_SESSION / SIGNED_IN / SIGNED_OUT path). */
   const [loading, setLoading] = useState(true);
   const [oauthRedirecting, setOauthRedirecting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -124,7 +120,7 @@ export function useAuth() {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: returnTo || `${window.location.origin}/`,
+          redirectTo: returnTo,
           queryParams: {
             access_type: "offline",
             prompt: "consent",
@@ -141,7 +137,6 @@ export function useAuth() {
     try {
       await withTimeout(supabase.auth.signOut({ scope: "global" }), SIGN_OUT_TIMEOUT_MS);
     } catch {
-      /* remote sign-out failed — continue with local cleanup */
     } finally {
       try {
         await withTimeout(
@@ -149,7 +144,6 @@ export function useAuth() {
           LOCAL_SIGN_OUT_TIMEOUT_MS
         );
       } catch {
-        /* ignore */
       }
       setSession(null);
       setPlan("free");

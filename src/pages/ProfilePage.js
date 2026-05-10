@@ -8,9 +8,6 @@ function isUuid(segment) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(segment || ""));
 }
 
-/**
- * Public profile at /u/:slug (slug or member UUID in path).
- */
 export default function ProfilePage({
   user,
   onAuthRequired,
@@ -33,10 +30,10 @@ export default function ProfilePage({
     let canceled = false;
     (async () => {
       setLoading(true);
-      const q = supabase.from("members").select("*");
-      const { data, error } = isUuid(segment)
-        ? await q.eq("id", segment).maybeSingle()
-        : await q.eq("slug", segment).maybeSingle();
+      const res = isUuid(segment)
+        ? await supabase.from("members").select("*").eq("id", segment).maybeSingle()
+        : await supabase.from("members").select("*").eq("slug", segment).maybeSingle();
+      const { data, error } = res;
       if (canceled) return;
       if (error || !data) {
         setMember(null);

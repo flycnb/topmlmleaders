@@ -299,11 +299,6 @@ export function useAI(user) {
     [provider, availableTo]
   );
 
-  const available = useMemo(
-    () => userMayUseAi(settingsMemo, user),
-    [settingsMemo, user]
-  );
-
   const clearAiFilters = useCallback(() => {
     setFilters(null);
     setBannerQuery("");
@@ -391,5 +386,5 @@ export function useAI(user) {
     [settingsMemo, user]
   );
 
-  return { ask, loading, available, filters, clearAiFilters, bannerQuery, assistantNote };
+  return { ask, loading, filters, clearAiFilters, bannerQuery, assistantNote };
 }
