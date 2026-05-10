@@ -244,11 +244,37 @@ function Home({
   function renderDirectory() {
     return (
       <>
-        <section style={{ margin: "12px 16px 0", borderRadius: 24, padding: "26px 16px", background: "linear-gradient(135deg, #4F46E5, #312E81)" }}>
+        <section
+          style={{
+            margin: "12px clamp(14px, 4vw, 20px) 0",
+            borderRadius: 24,
+            padding: "26px clamp(14px, 5vw, 22px)",
+            paddingLeft: "max(clamp(14px, 5vw, 22px), env(safe-area-inset-left))",
+            paddingRight: "max(clamp(14px, 5vw, 22px), env(safe-area-inset-right))",
+            background: "linear-gradient(135deg, #4F46E5, #312E81)",
+            boxSizing: "border-box",
+          }}
+        >
           <h2 style={{ color: "#FFFFFF", fontSize: 32, margin: 0, fontWeight: 800, lineHeight: 1.1 }}>Find MLM Leaders Worldwide</h2>
           <p style={{ color: "rgba(255,255,255,0.92)", marginTop: 10, fontSize: 15 }}>AI Powered Search · Connect · Grow Worldwide</p>
-          <div style={{ marginTop: 16, background: "#FFFFFF", borderRadius: 999, minHeight: 52, display: "flex", alignItems: "center", padding: "6px 6px 6px 14px", gap: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
-            <span>🔍</span>
+          <div
+            style={{
+              marginTop: 16,
+              background: "#FFFFFF",
+              borderRadius: 999,
+              minHeight: 52,
+              display: "grid",
+              gridTemplateColumns: "auto minmax(0, 1fr) auto auto",
+              alignItems: "center",
+              columnGap: 8,
+              padding: "8px 12px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+              width: "100%",
+              maxWidth: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            <span style={{ flexShrink: 0 }}>🔍</span>
             <input
               ref={heroSearchInputRef}
               value={searchTerm}
@@ -260,21 +286,40 @@ function Home({
                 }
               }}
               placeholder="Search by name, city, company, role, country..."
-              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "Inter, sans-serif" }}
+              style={{ minWidth: 0, width: "100%", border: "none", outline: "none", fontSize: 14, fontFamily: "Inter, sans-serif" }}
               aria-label="Search leaders"
             />
             <button
               type="button"
               aria-expanded={showAiPanel}
               onClick={() => setShowAiPanel((prev) => !prev)}
-              style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 11px", cursor: "pointer" }}
+              style={{
+                borderRadius: 999,
+                border: "none",
+                background: "#6C63FF",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                padding: "8px min(11px, 3vw)",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
             >
               🧠
             </button>
             <button
               type="button"
               onClick={handleHeroSearchActivate}
-              style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 14px", cursor: "pointer" }}
+              style={{
+                borderRadius: 999,
+                border: "none",
+                background: "#6C63FF",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                padding: "8px min(14px, 3vw)",
+                cursor: "pointer",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+              }}
             >
               Search
             </button>

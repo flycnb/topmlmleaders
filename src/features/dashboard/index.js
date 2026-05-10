@@ -48,6 +48,37 @@ function slugify(text) {
     .replace(/\s+/g, "-");
 }
 
+/** Escape structured values for vCard 3.0 (comma, semicolon, backslash, newline). */
+function escapeVcardText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
+function buildDashboardProfileVcard({ name, phone, whatsappDigits, email, company, role, city, country, profileUrl }) {
+  const lines = ["BEGIN:VCARD", "VERSION:3.0"];
+  const fn = escapeVcardText(name);
+  lines.push(fn ? `FN:${fn}` : "FN:Member");
+  lines.push(fn ? `N:${fn};;;;` : "N:Member;;;;");
+  if (company) lines.push(`ORG:${escapeVcardText(company)}`);
+  if (role) lines.push(`TITLE:${escapeVcardText(role)}`);
+  const tel = String(phone || "").replace(/[^\d+]/g, "");
+  if (tel) lines.push(`TEL;TYPE=CELL:${escapeVcardText(tel)}`);
+  if (whatsappDigits) {
+    lines.push(`item1.TEL;TYPE=CELL:${escapeVcardText(whatsappDigits)}`);
+    lines.push("item1.X-ABLabel:WhatsApp");
+  }
+  if (email) lines.push(`EMAIL;TYPE=INTERNET:${escapeVcardText(email)}`);
+  if (city || country) {
+    lines.push(`ADR;TYPE=WORK:;;;${escapeVcardText(city)};;;${escapeVcardText(country)}`);
+  }
+  if (profileUrl) lines.push(`URL:${escapeVcardText(profileUrl)}`);
+  lines.push("END:VCARD");
+  return lines.join("\r\n");
+}
+
 /** Reject if `promise` does not settle within `ms` (avoids hung Supabase calls leaving UI stuck). */
 function withTimeout(promise, ms, label = "Request") {
   return Promise.race([
@@ -164,6 +195,47 @@ function Dashboard({
     const slug = myMember?.slug || slugify(profileForm.name || user?.name);
     return `https://topmlmleaders.com/${slug}`;
   }, [myMember?.slug, profileForm.name, user?.name]);
+
+  const profileVcard = useMemo(() => {
+    const slug =
+      (myMember?.slug && String(myMember.slug).trim()) ||
+      slugify(profileForm.name || user?.name || "") ||
+      (myMember?.id != null ? String(myMember.id) : "");
+    const websiteUrl = slug
+      ? `https://topmlmleaders.com/u/${encodeURIComponent(slug)}`
+      : "https://topmlmleaders.com/";
+
+    return buildDashboardProfileVcard({
+      name: String(profileForm.name || myMember?.name || user?.name || "").trim(),
+      phone: String(profileForm.phone || myMember?.phone || "").trim(),
+      whatsappDigits: String(profileForm.wa || myMember?.wa || "").replace(/\D/g, ""),
+      email: String(user?.email || "").trim(),
+      company: String(profileForm.company || myMember?.company || "").trim(),
+      role: String(profileForm.role || myMember?.role || "").trim(),
+      city: String(profileForm.city || myMember?.city || "").trim(),
+      country: String(profileForm.country || myMember?.country || "").trim(),
+      profileUrl: websiteUrl,
+    });
+  }, [
+    profileForm.name,
+    profileForm.phone,
+    profileForm.wa,
+    profileForm.company,
+    profileForm.role,
+    profileForm.city,
+    profileForm.country,
+    myMember?.name,
+    myMember?.phone,
+    myMember?.wa,
+    myMember?.company,
+    myMember?.role,
+    myMember?.city,
+    myMember?.country,
+    myMember?.slug,
+    myMember?.id,
+    user?.name,
+    user?.email,
+  ]);
 
   useEffect(() => {
     const raw = myMember?.youtube_urls;
@@ -952,7 +1024,7 @@ function Dashboard({
           </div>
           <div style={{ marginTop: 14, background: "#F8FAFC", borderRadius: 12, padding: 12 }}>
             <div style={{ marginBottom: 8, fontWeight: 700 }}>Profile QR Code</div>
-            <QRCodeCanvas id={qrId} value={profileUrl} size={160} includeMargin />
+            <QRCodeCanvas id={qrId} value={profileVcard} size={160} includeMargin />
             <div style={{ marginTop: 8 }}>
               <button type="button" onClick={downloadQr} style={{ border: "none", background: "var(--color-primary)", color: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}>
                 Download QR PNG
