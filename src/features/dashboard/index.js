@@ -99,123 +99,125 @@ function Dashboard({
 
     async function loadDashboard() {
       setLoading(true);
-      const myMemberPromise = supabase
-        .from("members")
-        .select("*")
-        .eq("owner_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      const conversationsPromise = supabase
-        .from("conversations")
-        .select("*")
-        .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
-        .order("last_message_time", { ascending: false });
-      const bookmarksPromise = supabase
-        .from("bookmarks")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      const outgoingPromise = supabase
-        .from("bookings")
-        .select("*")
-        .eq("booker_id", user.id)
-        .order("created_at", { ascending: false });
-
-      const [myMemberRes, convRes, bookmarksRes, outgoingRes] = await Promise.all([
-        myMemberPromise,
-        conversationsPromise,
-        bookmarksPromise,
-        outgoingPromise,
-      ]);
-
-      if (!active) return;
-
-      const memberRow = myMemberRes.data || null;
-      setMyMember(memberRow);
-
-      const convRows = convRes.data || [];
-      const bookmarkRows = bookmarksRes.data || [];
-      const outgoingRows = outgoingRes.data || [];
-
-      setConversations(convRows);
-      setOutgoingBookings(outgoingRows);
-
-      const memberIdsFromBookmarks = bookmarkRows.map((row) => row.member_id);
-      const otherConversationOwnerIds = convRows.map((row) =>
-        row.member1_id === user.id ? row.member2_id : row.member1_id
-      );
-      const bookingMemberIds = outgoingRows.map((row) => row.member_id);
-
-      const ownerIdSet = new Set(otherConversationOwnerIds);
-      if (memberRow?.owner_id) ownerIdSet.add(memberRow.owner_id);
-
-      const [membersByOwnerRes, bookmarkMemberRes] = await Promise.all([
-        ownerIdSet.size
-          ? supabase
-              .from("members")
-              .select("*")
-              .in("owner_id", Array.from(ownerIdSet))
-          : Promise.resolve({ data: [] }),
-        memberIdsFromBookmarks.length || bookingMemberIds.length
-          ? supabase
-              .from("members")
-              .select("*")
-              .in(
-                "id",
-                Array.from(new Set([...memberIdsFromBookmarks, ...bookingMemberIds]))
-              )
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      if (!active) return;
-
-      const allMembers = [...(membersByOwnerRes.data || []), ...(bookmarkMemberRes.data || [])];
-      const byId = {};
-      allMembers.forEach((row) => {
-        byId[row.id] = row;
-      });
-      setMembersById(byId);
-
-      const bookmarkWithMembers = bookmarkRows
-        .map((row) => ({ ...row, member: byId[row.member_id] }))
-        .filter((row) => Boolean(row.member));
-      setBookmarks(bookmarkWithMembers);
-
-      setStats({
-        followers: Number(memberRow?.follower_count || 0),
-        messages: convRows.length,
-        bookmarks: bookmarkRows.length,
-      });
-
-      if (memberRow?.id) {
-        const incomingRes = await supabase
+      try {
+        const myMemberPromise = supabase
+          .from("members")
+          .select("*")
+          .eq("owner_id", user.id)
+          .limit(1)
+          .maybeSingle();
+        const conversationsPromise = supabase
+          .from("conversations")
+          .select("*")
+          .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
+          .order("last_message_time", { ascending: false });
+        const bookmarksPromise = supabase
+          .from("bookmarks")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        const outgoingPromise = supabase
           .from("bookings")
           .select("*")
-          .eq("member_id", memberRow.id)
+          .eq("booker_id", user.id)
           .order("created_at", { ascending: false });
-        if (active) setIncomingBookings(incomingRes.data || []);
-      } else {
-        setIncomingBookings([]);
+
+        const [myMemberRes, convRes, bookmarksRes, outgoingRes] = await Promise.all([
+          myMemberPromise,
+          conversationsPromise,
+          bookmarksPromise,
+          outgoingPromise,
+        ]);
+
+        if (!active) return;
+
+        const memberRow = myMemberRes.data || null;
+        setMyMember(memberRow);
+
+        const convRows = convRes.data || [];
+        const bookmarkRows = bookmarksRes.data || [];
+        const outgoingRows = outgoingRes.data || [];
+
+        setConversations(convRows);
+        setOutgoingBookings(outgoingRows);
+
+        const memberIdsFromBookmarks = bookmarkRows.map((row) => row.member_id).filter(Boolean);
+        const otherConversationOwnerIds = convRows
+          .map((row) => (row.member1_id === user.id ? row.member2_id : row.member1_id))
+          .filter(Boolean);
+        const bookingMemberIds = outgoingRows.map((row) => row.member_id).filter(Boolean);
+
+        const ownerIdSet = new Set(otherConversationOwnerIds);
+        if (memberRow?.owner_id) ownerIdSet.add(memberRow.owner_id);
+
+        const bookmarkOrBookingMemberIds = Array.from(
+          new Set([...memberIdsFromBookmarks, ...bookingMemberIds])
+        );
+
+        const [membersByOwnerRes, bookmarkMemberRes] = await Promise.all([
+          ownerIdSet.size
+            ? supabase
+                .from("members")
+                .select("*")
+                .in("owner_id", Array.from(ownerIdSet))
+            : Promise.resolve({ data: [] }),
+          bookmarkOrBookingMemberIds.length
+            ? supabase.from("members").select("*").in("id", bookmarkOrBookingMemberIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        if (!active) return;
+
+        const allMembers = [...(membersByOwnerRes.data || []), ...(bookmarkMemberRes.data || [])];
+        const byId = {};
+        allMembers.forEach((row) => {
+          byId[row.id] = row;
+        });
+        setMembersById(byId);
+
+        const bookmarkWithMembers = bookmarkRows
+          .map((row) => ({ ...row, member: byId[row.member_id] }))
+          .filter((row) => Boolean(row.member));
+        setBookmarks(bookmarkWithMembers);
+
+        setStats({
+          followers: Number(memberRow?.follower_count || 0),
+          messages: convRows.length,
+          bookmarks: bookmarkRows.length,
+        });
+
+        if (memberRow?.id) {
+          const incomingRes = await supabase
+            .from("bookings")
+            .select("*")
+            .eq("member_id", memberRow.id)
+            .order("created_at", { ascending: false });
+          if (active) setIncomingBookings(incomingRes.data || []);
+        } else {
+          setIncomingBookings([]);
+        }
+
+        setProfileForm({
+          name: memberRow?.name || user?.name || "",
+          company: memberRow?.company || "",
+          role: memberRow?.role || "",
+          city: memberRow?.city || "",
+          country: memberRow?.country || "",
+          wa: memberRow?.wa || "",
+          phone: memberRow?.phone || "",
+          phoneVisibility: memberRow?.phone_visibility || "private",
+          waVisibility: memberRow?.wa_visibility || "private",
+          description: memberRow?.description || "",
+          yearsExp: memberRow?.years_exp || "",
+          teamSize: memberRow?.team_size || "",
+          earnings: memberRow?.earnings || "",
+          youtubeUrl: memberRow?.youtube_url || "",
+        });
+      } catch {
+        /* Supabase/network failures — still show dashboard shell */
+      } finally {
+        if (active) setLoading(false);
       }
-
-      setProfileForm({
-        name: memberRow?.name || user?.name || "",
-        company: memberRow?.company || "",
-        role: memberRow?.role || "",
-        city: memberRow?.city || "",
-        country: memberRow?.country || "",
-        wa: memberRow?.wa || "",
-        phone: memberRow?.phone || "",
-        phoneVisibility: memberRow?.phone_visibility || "private",
-        waVisibility: memberRow?.wa_visibility || "private",
-        description: memberRow?.description || "",
-        yearsExp: memberRow?.years_exp || "",
-        teamSize: memberRow?.team_size || "",
-        earnings: memberRow?.earnings || "",
-        youtubeUrl: memberRow?.youtube_url || "",
-      });
-
-      setLoading(false);
     }
 
     loadDashboard();
