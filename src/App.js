@@ -11,6 +11,8 @@ import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
 import FlagModal from "./features/flags/FlagModal";
 
+const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
+
 function App() {
   const [currentScreen, setCurrentScreen] = useState("home");
   const [selectedMember, setSelectedMember] = useState(null);
@@ -138,7 +140,7 @@ function App() {
   }
 
   if (currentScreen === "admin") {
-    if (user?.email !== "digidreamltd@gmail.com") {
+    if (!ADMIN_EMAIL || user?.email !== ADMIN_EMAIL) {
       return (
         <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, textAlign: "center" }}>
           <div>

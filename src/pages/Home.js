@@ -91,6 +91,9 @@ function Home({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
+  const heroSearchInputRef = useRef(null);
+  const directoryResultsRef = useRef(null);
+  const adminEmail = process.env.REACT_APP_ADMIN_EMAIL || "";
   const {
     notifications,
     unreadCount,
@@ -227,6 +230,11 @@ function Home({
     };
   }, [showUserMenu, showNotifications]);
 
+  function handleHeroSearchActivate() {
+    heroSearchInputRef.current?.blur();
+    directoryResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function handleFollow(memberId) {
     const member = members.find((item) => item.id === memberId);
     if (!member) return;
@@ -250,10 +258,18 @@ function Home({
           <div style={{ marginTop: 16, background: "#FFFFFF", borderRadius: 999, minHeight: 52, display: "flex", alignItems: "center", padding: "6px 6px 6px 14px", gap: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
             <span>🔍</span>
             <input
+              ref={heroSearchInputRef}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleHeroSearchActivate();
+                }
+              }}
               placeholder="Search by name, city, company, role, country..."
               style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "Inter, sans-serif" }}
+              aria-label="Search leaders"
             />
             {aiAvailable ? (
               <button
@@ -265,7 +281,13 @@ function Home({
                 🧠
               </button>
             ) : null}
-            <button type="button" style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 14px", cursor: "pointer" }}>Search</button>
+            <button
+              type="button"
+              onClick={handleHeroSearchActivate}
+              style={{ borderRadius: 999, border: "none", background: "#6C63FF", color: "#FFFFFF", fontWeight: 700, padding: "8px 14px", cursor: "pointer" }}
+            >
+              Search
+            </button>
           </div>
           <AISearchAssistant open={showAiPanel} ask={ask} loading={aiAskLoading} assistantNote={aiAssistNote} />
           <div className="no-scrollbar" style={{ marginTop: 12, display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
@@ -295,7 +317,7 @@ function Home({
           </div>
         </section>
 
-        <section style={{ padding: "18px 16px 24px" }}>
+        <section ref={directoryResultsRef} id="directory-results" style={{ padding: "18px 16px 24px" }}>
           {aiBannerQuery ? (
             <div
               className="fade-in"
@@ -486,7 +508,7 @@ function Home({
             >
               💎 Plans
             </button>
-            {user?.email === "digidreamltd@gmail.com" ? (
+            {adminEmail && user?.email === adminEmail ? (
               <button type="button" onClick={onOpenAdmin} style={{ border: "none", borderRadius: 999, background: "#EF4444", color: "#FFFFFF", padding: "7px 10px", fontWeight: 700, cursor: "pointer" }}>
                 ⚡ Admin
               </button>

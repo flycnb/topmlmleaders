@@ -380,7 +380,15 @@ function AuthModal({ open, onClose, signInWithGoogle, loading }) {
         )}
 
         <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 11, color: "var(--color-muted)" }}>
-          By continuing you agree to our Terms of Service
+          By continuing you agree to our{" "}
+          <a
+            href="https://topmlmleaders.com/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--color-primary)", fontWeight: 700 }}
+          >
+            Terms of Service
+          </a>
         </p>
       </div>
     </div>
