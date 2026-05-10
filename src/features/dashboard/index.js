@@ -246,6 +246,8 @@ function Dashboard({
       country: profileForm.country,
       wa: profileForm.wa,
       phone: profileForm.phone,
+      phone_visibility: profileForm.phoneVisibility,
+      wa_visibility: profileForm.waVisibility,
       description: profileForm.description,
       team_size: profileForm.teamSize,
       earnings: profileForm.earnings,
