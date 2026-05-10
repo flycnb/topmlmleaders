@@ -166,6 +166,9 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const color = liveMember.color || "#6C63FF";
   const phoneAllowed = liveMember.phoneVisibility === "public" || (user && liveMember.phoneVisibility !== "private");
   const waAllowed = liveMember.waVisibility === "public" || (user && liveMember.waVisibility !== "private");
+  const emailVis =
+    liveMember.emailVisibility || liveMember.email_visibility || "private";
+  const emailAllowed = emailVis === "public" || (user && emailVis !== "private");
   const galleryPhotoUrls = normalizeGalleryUrls(liveMember.gallery_urls);
   const services = Array.isArray(liveMember.services) ? liveMember.services : [];
   const events = Array.isArray(liveMember.events) ? liveMember.events : [];
@@ -335,13 +338,128 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       );
     }
     if (liveMember.description) rows.push(card("About Me", <p style={{ margin: 0, lineHeight: 1.7 }}>{liveMember.description}</p>));
-    if (phoneAllowed || waAllowed) {
+    const phoneRaw = String(liveMember.phone || "").trim();
+    const waDigits = liveMember.wa ? String(liveMember.wa).replace(/[^\d]/g, "") : "";
+    const emailRaw = String(liveMember.email || "").trim();
+    const telHref = phoneRaw ? `tel:${phoneRaw.replace(/[^\d+]/g, "")}` : "";
+    const canCall = Boolean(phoneRaw && phoneAllowed);
+    const canWa = Boolean(waDigits && waAllowed);
+    const canMail = Boolean(emailRaw && emailAllowed);
+    const showContact = phoneRaw.length > 0 || waDigits.length > 0 || emailRaw.length > 0;
+
+    const contactRoundBtn = {
+      width: 52,
+      height: 52,
+      borderRadius: "50%",
+      border: "1px solid var(--color-border)",
+      background: "#FFFFFF",
+      display: "grid",
+      placeItems: "center",
+      cursor: "pointer",
+      fontSize: 22,
+      lineHeight: 1,
+      padding: 0,
+      justifySelf: "stretch",
+      maxWidth: 52,
+    };
+
+    const contactRoundBtnMuted = {
+      ...contactRoundBtn,
+      opacity: 0.45,
+      cursor: "default",
+      background: "#F3F4F6",
+    };
+
+    if (showContact) {
       rows.push(
         card(
           "Contact",
-          <div style={{ display: "grid", gap: 8 }}>
-            {phoneAllowed ? <button type="button" style={{ borderRadius: 12, border: "1px solid var(--color-border)", background: "#FFFFFF", padding: 10, fontWeight: 700 }}>📞 Call</button> : null}
-            {waAllowed ? <button type="button" onClick={openWa} style={{ borderRadius: 12, border: "none", background: "#10B981", color: "#FFFFFF", padding: 10, fontWeight: 700, cursor: "pointer" }}>💬 WhatsApp</button> : null}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 10,
+              alignItems: "center",
+              justifyItems: "center",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Call"
+              title="Call"
+              style={
+                !phoneRaw
+                  ? contactRoundBtnMuted
+                  : {
+                      ...contactRoundBtn,
+                      borderColor: canCall ? `${color}` : "#E5E7EB",
+                      boxShadow: canCall ? `0 2px 12px ${color}33` : "none",
+                    }
+              }
+              disabled={!phoneRaw}
+              onClick={() => {
+                if (!phoneRaw) return;
+                if (!canCall) {
+                  onAuthRequired();
+                  return;
+                }
+                window.location.href = telHref;
+              }}
+            >
+              📞
+            </button>
+            <button
+              type="button"
+              aria-label="WhatsApp"
+              title="WhatsApp"
+              style={
+                !waDigits
+                  ? contactRoundBtnMuted
+                  : {
+                      ...contactRoundBtn,
+                      borderColor: canWa ? "#10B981" : "#E5E7EB",
+                      background: canWa ? "#ECFDF5" : "#F3F4F6",
+                    }
+              }
+              disabled={!waDigits}
+              onClick={() => {
+                if (!waDigits) return;
+                if (!canWa) {
+                  onAuthRequired();
+                  return;
+                }
+                window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");
+              }}
+            >
+              💬
+            </button>
+            <button
+              type="button"
+              aria-label="Email"
+              title="Email"
+              style={
+                !emailRaw
+                  ? contactRoundBtnMuted
+                  : {
+                      ...contactRoundBtn,
+                      borderColor: canMail ? "#2563EB" : "#E5E7EB",
+                      background: canMail ? "#EFF6FF" : "#F3F4F6",
+                    }
+              }
+              disabled={!emailRaw}
+              onClick={() => {
+                if (!emailRaw) return;
+                if (!canMail) {
+                  onAuthRequired();
+                  return;
+                }
+                window.location.href = `mailto:${emailRaw}?subject=${encodeURIComponent(
+                  `Re: ${liveMember.name || "TopMLMLeaders"} profile`
+                )}`;
+              }}
+            >
+              ✉️
+            </button>
           </div>
         )
       );
