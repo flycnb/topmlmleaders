@@ -15,6 +15,17 @@ const AI_FETCH_DEADLINE_MS = 65000;
 /** Prevent hanging forever on stalled JSON streams (Safari has seen rare stalls). */
 const RESPONSE_JSON_DEADLINE_MS = 45000;
 
+/** Avoid surfacing leaked API fields (e.g. model id) as user-visible “assistant” text. */
+function looksLikeProviderModelId(s) {
+  const t = String(s || "").trim();
+  if (!t || t.includes("{") || t.includes("[")) return false;
+  return (
+    /^claude-[a-z0-9.-]+$/i.test(t) ||
+    /^gpt-[a-z0-9.-]+$/i.test(t) ||
+    /^gemini-[a-z0-9.-]+$/i.test(t)
+  );
+}
+
 /** Strip ```json ... ``` fences Claude sometimes adds despite instructions. */
 function stripMarkdownJsonFence(raw) {
   let s = String(raw || "").trim();
@@ -71,21 +82,35 @@ function filterShapeOnly(obj) {
   return out;
 }
 
-function extractAnthropicStyleTextBlocks(content) {
+/**
+ * Claude Messages API: `content` is an array of blocks; assistant JSON lives in `text` on `type: "text"`
+ * blocks. Proxies may omit `type` — still read `.text` (BUG-006).
+ */
+function extractAnthropicMessageTextFromContent(content) {
   if (!Array.isArray(content)) return "";
-  return content
-    .filter((b) => b && typeof b === "object" && !Array.isArray(b) && b.type === "text" && typeof b.text === "string")
-    .map((b) => b.text)
-    .join("");
+  const parts = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (typeof block.text !== "string" || !block.text.trim()) continue;
+    const typ = block.type;
+    if (typ != null && typ !== "text") continue;
+    parts.push(block.text);
+  }
+  return parts.join("");
 }
 
 /**
- * Edge returns `{ ok, text }`; if anything upstream leaked an Anthropic-shaped JSON into the body,
- * recover assistant text from `content[]` instead of treating `model` as a filter field.
+ * Edge returns `{ ok, text }`; upstream may also forward raw Anthropic `{ model, content: [{ text }] }`.
+ * Always prefer assistant message text from `content` over top-level `text` (which may wrongly echo `model`).
  */
 function extractAssistantTextFromEdgePayload(data) {
   if (!data || typeof data !== "object") return "";
-  if (typeof data.text === "string" && data.text.trim()) return data.text.trim();
+  const fromContent = extractAnthropicMessageTextFromContent(data.content).trim();
+  if (fromContent) return fromContent;
+  if (typeof data.text === "string" && data.text.trim()) {
+    const t = data.text.trim();
+    if (!looksLikeProviderModelId(t)) return t;
+  }
   if (data.filters && typeof data.filters === "object") {
     try {
       return JSON.stringify(data.filters);
@@ -93,8 +118,6 @@ function extractAssistantTextFromEdgePayload(data) {
       return "";
     }
   }
-  const fromContent = extractAnthropicStyleTextBlocks(data.content);
-  if (fromContent.trim()) return fromContent.trim();
   return "";
 }
 
@@ -112,15 +135,25 @@ function normalizeEdgeSuccessEnvelope(parsed) {
     return { success: false, message: String(p.error) };
   }
 
-  if (p.ok === true && typeof p.text === "string") {
-    return { success: true, data: p };
+  /** Raw / wrapped Anthropic-style body: parse JSON filters from `content[0].text` first (BUG-006). */
+  const fromAnthropic = extractAnthropicMessageTextFromContent(
+    Array.isArray(p.content) ? p.content : null
+  ).trim();
+  if (fromAnthropic) {
+    return { success: true, data: { ok: true, text: fromAnthropic } };
   }
 
-  const content = p.content;
-  if (Array.isArray(content)) {
-    const extracted = extractAnthropicStyleTextBlocks(content).trim();
-    if (extracted) {
-      return { success: true, data: { ok: true, text: extracted } };
+  if (p.ok === true && typeof p.text === "string") {
+    const t = String(p.text).trim();
+    if (t && !looksLikeProviderModelId(t)) {
+      return { success: true, data: p };
+    }
+  }
+
+  if (typeof p.text === "string") {
+    const t = String(p.text).trim();
+    if (t && !looksLikeProviderModelId(t)) {
+      return { success: true, data: { ok: true, text: t } };
     }
   }
 
@@ -359,7 +392,7 @@ export function useAI(user) {
 
         const data = result.data;
         const assistantRaw = extractAssistantTextFromEdgePayload(data);
-        if (!assistantRaw) {
+        if (!assistantRaw || looksLikeProviderModelId(assistantRaw)) {
           setFilters(null);
           setBannerQuery("");
           setAssistantNote("AI returned no filter text. Try again or rephrase.");
