@@ -150,9 +150,16 @@ function Dashboard({
       return undefined;
     }
     let active = true;
+    let loadTimeoutId = null;
 
     async function loadDashboard() {
       setLoading(true);
+      loadTimeoutId = window.setTimeout(() => {
+        if (!active) return;
+        console.warn("[dashboard] dashboard data fetch exceeded 5s; unlocking UI");
+        setLoading(false);
+      }, 5000);
+
       try {
         const myMemberPromise = supabase
           .from("members")
@@ -268,9 +275,13 @@ function Dashboard({
           earnings: memberRow?.earnings || "",
           youtubeUrl: memberRow?.youtube_url || "",
         });
-      } catch {
-        /* Supabase/network failures — still show dashboard shell */
+      } catch (err) {
+        console.error("[dashboard] loadDashboard failed", err);
       } finally {
+        if (loadTimeoutId != null) {
+          window.clearTimeout(loadTimeoutId);
+          loadTimeoutId = null;
+        }
         if (active) setLoading(false);
       }
     }
@@ -278,6 +289,7 @@ function Dashboard({
     loadDashboard();
     return () => {
       active = false;
+      if (loadTimeoutId != null) window.clearTimeout(loadTimeoutId);
       setLoading(false);
     };
   }, [authInitializing, user?.id, user?.name]);
