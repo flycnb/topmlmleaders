@@ -132,6 +132,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const fileRef = useRef(null);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [member?.id]);
+
+  useEffect(() => {
     const normalized = normalizeMember(member) || {};
     setLiveMember(normalized);
     setFollowers(Number(normalized.followerCount || 0));
@@ -262,7 +266,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   }
 
   function onProfileFollow() {
-    toggleFollow(liveMember, (delta) => setFollowers((prev) => Math.max(0, prev + delta)));
+    toggleFollow(liveMember, ({ followerCount }) => {
+      setFollowers(followerCount);
+      setLiveMember((prev) => (prev ? { ...prev, followerCount } : prev));
+    });
   }
 
   function renderAbout() {

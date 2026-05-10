@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
+async function fetchFollowerCount(memberId) {
+  const { data: row } = await supabase
+    .from("members")
+    .select("follower_count")
+    .eq("id", memberId)
+    .maybeSingle();
+  return Number(row?.follower_count ?? 0);
+}
+
 export function useFollow(user, onAuthRequired) {
   const [followingIds, setFollowingIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -34,7 +43,7 @@ export function useFollow(user, onAuthRequired) {
 
   const stableFollowingIds = useMemo(() => followingIds, [followingIds]);
 
-  async function toggleFollow(member, onCountUpdate) {
+  async function toggleFollow(member, onFollowerCountSynced) {
     if (!user?.id) {
       onAuthRequired?.();
       return;
@@ -42,7 +51,6 @@ export function useFollow(user, onAuthRequired) {
     const memberId = member?.id;
     if (!memberId) return;
     const wasFollowing = followingIds.has(memberId);
-    const delta = wasFollowing ? -1 : 1;
 
     setFollowingIds((prev) => {
       const next = new Set(prev);
@@ -50,7 +58,11 @@ export function useFollow(user, onAuthRequired) {
       else next.add(memberId);
       return next;
     });
-    onCountUpdate?.(delta);
+
+    const syncFollowerUi = async () => {
+      const followerCount = await fetchFollowerCount(memberId);
+      onFollowerCountSynced?.({ memberId, followerCount });
+    };
 
     if (wasFollowing) {
       const { error: removeError } = await supabase
@@ -64,8 +76,8 @@ export function useFollow(user, onAuthRequired) {
         .eq("id", memberId);
       if (removeError || countError) {
         setFollowingIds((prev) => new Set(prev).add(memberId));
-        onCountUpdate?.(1);
       }
+      await syncFollowerUi();
       return;
     }
 
@@ -78,7 +90,17 @@ export function useFollow(user, onAuthRequired) {
       .from("members")
       .update({ follower_count: (member.followerCount || 0) + 1 })
       .eq("id", memberId);
-    if (!addError && !countError && member.ownerId) {
+    if (addError || countError) {
+      setFollowingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(memberId);
+        return next;
+      });
+      await syncFollowerUi();
+      return;
+    }
+
+    if (member.ownerId) {
       await supabase.from("notifications").insert({
         user_id: member.ownerId,
         type: "follow",
@@ -88,14 +110,7 @@ export function useFollow(user, onAuthRequired) {
         created_at: new Date().toISOString(),
       });
     }
-    if (addError || countError) {
-      setFollowingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(memberId);
-        return next;
-      });
-      onCountUpdate?.(-1);
-    }
+    await syncFollowerUi();
   }
 
   return { isFollowing, toggleFollow, followingIds: stableFollowingIds, loading };

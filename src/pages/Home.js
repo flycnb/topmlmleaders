@@ -142,7 +142,8 @@ function Home({
         const membersQuery = supabase
           .from("members")
           .select("*")
-          .order("follower_count", { ascending: false, nullsFirst: false });
+          .order("follower_count", { ascending: false, nullsFirst: false })
+          .limit(50);
         const timeoutPromise = new Promise((resolve) => {
           window.setTimeout(() => {
             resolve({ data: null, error: { message: "members query timeout" } });
@@ -170,7 +171,7 @@ function Home({
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     function onResize() {
@@ -238,13 +239,9 @@ function Home({
   function handleFollow(memberId) {
     const member = members.find((item) => item.id === memberId);
     if (!member) return;
-    toggleFollow(member, (delta) => {
+    toggleFollow(member, ({ memberId: id, followerCount }) => {
       setMembers((prev) =>
-        prev.map((item) =>
-          item.id === memberId
-            ? { ...item, followerCount: Math.max(0, (item.followerCount || 0) + delta) }
-            : item
-        )
+        prev.map((item) => (item.id === id ? { ...item, followerCount } : item))
       );
     });
   }

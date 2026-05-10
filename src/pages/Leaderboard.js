@@ -52,7 +52,11 @@ export default function Leaderboard({ user, isFollowing, toggleFollow, onOpenPro
     let canceled = false;
     async function load() {
       setLoading(true);
-      const { data, error } = await supabase.from("members").select("*").order("follower_count", { ascending: false, nullsFirst: false });
+      const { data, error } = await supabase
+        .from("members")
+        .select("*")
+        .order("follower_count", { ascending: false, nullsFirst: false })
+        .limit(50);
       if (canceled) return;
       if (error || !data?.length) {
         setMembers([]);
@@ -65,7 +69,7 @@ export default function Leaderboard({ user, isFollowing, toggleFollow, onOpenPro
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   const countries = useMemo(() => {
     const set = new Set();
@@ -85,11 +89,9 @@ export default function Leaderboard({ user, isFollowing, toggleFollow, onOpenPro
       onAuthRequired?.();
       return;
     }
-    toggleFollow(member, (delta) => {
+    toggleFollow(member, ({ memberId: id, followerCount }) => {
       setMembers((prev) =>
-        prev.map((item) =>
-          item.id === member.id ? { ...item, followerCount: Math.max(0, (item.followerCount || 0) + delta) } : item
-        )
+        prev.map((item) => (item.id === id ? { ...item, followerCount } : item))
       );
     });
   }
