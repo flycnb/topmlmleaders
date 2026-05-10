@@ -1,7 +1,9 @@
 /**
  * TICKET-010 — Opportunity Board. Requires Supabase table (run in SQL editor):
  *
- * create table if not exists opportunity_posts (
+ * App reads/writes table public.opportunities (PostgREST suggested name vs legacy opportunity_posts).
+ * Example DDL — align columns with your Supabase schema:
+ * create table if not exists opportunities (
  *   id uuid default gen_random_uuid() primary key,
  *   user_id uuid references auth.users(id),
  *   member_id uuid references members(id),
@@ -94,7 +96,7 @@ export default function Board({ user, onAuthRequired }) {
     const to = from + PAGE_SIZE - 1;
 
     let query = supabase
-      .from("opportunity_posts")
+      .from("opportunities")
       .select("*")
       .eq("active", true)
       .order("created_at", { ascending: false })
@@ -231,12 +233,12 @@ export default function Board({ user, onAuthRequired }) {
       created_at: new Date().toISOString(),
     };
 
-    const { data: inserted, error } = await supabase.from("opportunity_posts").insert(payload).select("*").single();
+    const { data: inserted, error } = await supabase.from("opportunities").insert(payload).select("*").single();
 
     setSubmitting(false);
 
     if (error) {
-      setFormMsg(error.message || "Could not post. Is opportunity_posts table created?");
+      setFormMsg(error.message || "Could not post. Is opportunities table configured?");
       return;
     }
 
