@@ -245,26 +245,35 @@ async function postAiSearch(query, accessToken) {
 
     const contentType = (response.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
 
+    /**
+     * BUG-006 debug: body stream is single-use — read text once, log full payload, then JSON.parse.
+     * Remove or gate behind env after root cause is fixed (may include sensitive echoes).
+     */
+    const rawBody = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
+    console.log("[BUG-006 ai-search] raw HTTP response (before JSON parse)", {
+      url,
+      status: response.status,
+      ok: response.ok,
+      contentType,
+      headers: Object.fromEntries(response.headers.entries()),
+      rawBody,
+    });
+
     /** @type {unknown} */
     let parsed;
-    if (contentType.includes("application/json")) {
-      parsed = await withDeadline(response.json(), RESPONSE_JSON_DEADLINE_MS, "json-timeout");
-    } else {
-      const textBody = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
-      try {
-        parsed = JSON.parse(textBody);
-      } catch {
-        /**
-         * Was surfacing raw body (e.g. `model: claude-sonnet-…`) as assistantNote because
-         * `{ ok: false, error: text.slice(...) }` tripped the success-path error handler.
-         */
-        return {
-          ok: false,
-          message:
-            "AI service returned non-JSON. Confirm the ai-search Edge Function is deployed and returns JSON.",
-          data: null,
-        };
-      }
+    try {
+      parsed = rawBody.trim() ? JSON.parse(rawBody) : null;
+    } catch {
+      /**
+       * Was surfacing raw body (e.g. `model: claude-sonnet-…`) as assistantNote because
+       * `{ ok: false, error: text.slice(...) }` tripped the success-path error handler.
+       */
+      return {
+        ok: false,
+        message:
+          "AI service returned non-JSON. Confirm the ai-search Edge Function is deployed and returns JSON.",
+        data: null,
+      };
     }
 
     if (!response.ok) {
