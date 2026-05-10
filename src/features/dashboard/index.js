@@ -227,12 +227,16 @@ function Dashboard({
     };
   }, [authInitializing, user?.id, user?.name]);
 
-  async function saveProfile() {
-    if (!user?.id) return;
-    setSavingProfile(true);
-    setSaveStatus("");
-
-    const payload = {
+  function getMemberPayload() {
+    const initials =
+      profileForm.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "ML";
+    return {
       owner_id: user.id,
       name: profileForm.name,
       email: user.email,
@@ -249,58 +253,97 @@ function Dashboard({
       team_size: profileForm.teamSize,
       earnings: profileForm.earnings,
       youtube_url: profileForm.youtubeUrl,
-      photo_initials:
-        profileForm.name
-          .split(" ")
-          .map((part) => part[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase() || "ML",
+      photo_initials: initials,
       slug: myMember?.slug || slugify(profileForm.name),
       updated_at: new Date().toISOString(),
     };
+  }
 
-    let error = null;
-    if (myMember?.id) {
-      const res = await supabase.from("members").update(payload).eq("id", myMember.id);
-      error = res.error;
-    } else {
-      const res = await supabase
-        .from("members")
-        .insert({ ...payload, created_at: new Date().toISOString() })
-        .select("*")
-        .single();
-      error = res.error;
-      if (!error && res.data) setMyMember(res.data);
+  async function saveProfile() {
+    if (!user?.id) return;
+    setSavingProfile(true);
+    setSaveStatus("");
+    try {
+      const payload = getMemberPayload();
+      let error = null;
+      if (myMember?.id) {
+        const res = await supabase.from("members").update(payload).eq("id", myMember.id);
+        error = res.error;
+      } else {
+        const res = await supabase
+          .from("members")
+          .insert({ ...payload, created_at: new Date().toISOString() })
+          .select("*");
+        error = res.error;
+        if (!error && res.data?.[0]) setMyMember(res.data[0]);
+      }
+      setSaveStatus(error ? `Could not save profile: ${error.message}` : "✅ Profile saved!");
+    } catch (e) {
+      setSaveStatus(e instanceof Error ? e.message : "Could not save profile.");
+    } finally {
+      setSavingProfile(false);
     }
-
-    setSavingProfile(false);
-    setSaveStatus(error ? `Could not save profile: ${error.message}` : "✅ Profile saved!");
   }
 
   async function uploadAvatar(event) {
-    const file = event.target.files?.[0];
-    if (!file || !myMember?.id) return;
+    const input = event.target;
+    const file = input.files?.[0];
+    if (input) input.value = "";
+    if (!file || !user?.id) return;
+
     setUploading(true);
+    try {
+      let memberId = myMember?.id;
+      if (!memberId) {
+        const insertPayload = {
+          ...getMemberPayload(),
+          created_at: new Date().toISOString(),
+        };
+        const created = await supabase.from("members").insert(insertPayload).select("*");
+        if (created.error || !created.data?.[0]) {
+          setSaveStatus(
+            created.error
+              ? `Could not create profile for photo: ${created.error.message}`
+              : "Could not create profile for photo."
+          );
+          return;
+        }
+        setMyMember(created.data[0]);
+        memberId = created.data[0].id;
+      }
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${myMember.id}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true });
+      const rawExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      const path = `${memberId}-${Date.now()}.${ext}`;
+      const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
 
-    if (uploadError) {
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, cacheControl: "3600", contentType });
+
+      if (uploadError) {
+        setSaveStatus(`Upload failed: ${uploadError.message}`);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      const { error: dbError } = await supabase
+        .from("members")
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq("id", memberId);
+
+      if (dbError) {
+        setSaveStatus(`Photo uploaded but profile not updated: ${dbError.message}`);
+        return;
+      }
+      setMyMember((prev) => ({ ...prev, avatar_url: publicUrl }));
+      setSaveStatus("");
+    } catch (e) {
+      setSaveStatus(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
       setUploading(false);
-      return;
     }
-
-    const publicUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
-    const { error } = await supabase
-      .from("members")
-      .update({ avatar_url: publicUrl })
-      .eq("id", myMember.id);
-    setUploading(false);
-    if (!error) setMyMember((prev) => ({ ...prev, avatar_url: publicUrl }));
   }
 
   function downloadQr() {
@@ -595,15 +638,15 @@ function Dashboard({
             <input value={profileForm.role} onChange={(event) => setProfileForm((prev) => ({ ...prev, role: event.target.value }))} placeholder="Role" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
             <input value={profileForm.city} onChange={(event) => setProfileForm((prev) => ({ ...prev, city: event.target.value }))} placeholder="City" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
             <input value={profileForm.country} onChange={(event) => setProfileForm((prev) => ({ ...prev, country: event.target.value }))} placeholder="Country" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-            <input value={profileForm.wa} onChange={(event) => setProfileForm((prev) => ({ ...prev, wa: event.target.value }))} placeholder="WhatsApp Number" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
             <input value={profileForm.phone} onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Phone Number" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-            <select value={profileForm.phoneVisibility} onChange={(event) => setProfileForm((prev) => ({ ...prev, phoneVisibility: event.target.value }))} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
+            <select value={profileForm.phoneVisibility} onChange={(event) => setProfileForm((prev) => ({ ...prev, phoneVisibility: event.target.value }))} aria-label="Phone visibility" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
               <option value="public">Public</option>
               <option value="private">Private</option>
               <option value="pro">Pro & above</option>
               <option value="elite">Elite & above</option>
             </select>
-            <select value={profileForm.waVisibility} onChange={(event) => setProfileForm((prev) => ({ ...prev, waVisibility: event.target.value }))} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
+            <input value={profileForm.wa} onChange={(event) => setProfileForm((prev) => ({ ...prev, wa: event.target.value }))} placeholder="WhatsApp Number" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+            <select value={profileForm.waVisibility} onChange={(event) => setProfileForm((prev) => ({ ...prev, waVisibility: event.target.value }))} aria-label="WhatsApp visibility" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}>
               <option value="public">Public</option>
               <option value="private">Private</option>
               <option value="pro">Pro & above</option>
