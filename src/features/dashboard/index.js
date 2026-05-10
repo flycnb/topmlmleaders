@@ -25,8 +25,8 @@ const TABS = [
 
 const MAX_GALLERY_PHOTOS = 10;
 
-/** Must match bucket id in Supabase Dashboard → Storage (this project uses AVTARS). */
-const AVATAR_STORAGE_BUCKET = "AVTARS";
+/** Must match bucket id in Supabase Dashboard → Storage (this project uses avtars). */
+const AVATAR_STORAGE_BUCKET = "avtars";
 
 function timeAgo(value) {
   if (!value) return "";

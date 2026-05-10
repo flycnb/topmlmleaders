@@ -5,8 +5,8 @@ import QRCodeModal from "../../components/QRCode";
 
 const TABS = ["about", "gallery", "services", "events", "join us", "team", "book"];
 
-/** Must match bucket id in Supabase Dashboard → Storage (this project uses AVTARS). */
-const AVATAR_STORAGE_BUCKET = "AVTARS";
+/** Must match bucket id in Supabase Dashboard → Storage (this project uses avtars). */
+const AVATAR_STORAGE_BUCKET = "avtars";
 const SLOT_DAYS = [
   { label: "Today", slots: [{ id: "t1", time: "6:00 PM", type: "Call", booked: false }, { id: "t2", time: "8:00 PM", type: "WA Video", booked: true }] },
   { label: "Tomorrow", slots: [{ id: "n1", time: "4:00 PM", type: "WA Video", booked: false }, { id: "n2", time: "7:00 PM", type: "In-Person", booked: false }] },
