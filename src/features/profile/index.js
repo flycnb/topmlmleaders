@@ -345,121 +345,83 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     const canCall = Boolean(phoneRaw && phoneAllowed);
     const canWa = Boolean(waDigits && waAllowed);
     const canMail = Boolean(emailRaw && emailAllowed);
-    const showContact = phoneRaw.length > 0 || waDigits.length > 0 || emailRaw.length > 0;
+    /* Match MemberCard.js Message / Bookmark / Chat action buttons */
+    const contactActionBtn = { borderRadius: 10, fontWeight: 700, padding: "8px 6px", cursor: "pointer" };
+    const contactCols = Number(Boolean(phoneRaw)) + Number(Boolean(waDigits)) + Number(Boolean(emailRaw));
 
-    const contactRoundBtn = {
-      width: 52,
-      height: 52,
-      borderRadius: "50%",
-      border: "1px solid var(--color-border)",
-      background: "#FFFFFF",
-      display: "grid",
-      placeItems: "center",
-      cursor: "pointer",
-      fontSize: 22,
-      lineHeight: 1,
-      padding: 0,
-      justifySelf: "stretch",
-      maxWidth: 52,
-    };
-
-    const contactRoundBtnMuted = {
-      ...contactRoundBtn,
-      opacity: 0.45,
-      cursor: "default",
-      background: "#F3F4F6",
-    };
-
-    if (showContact) {
+    if (contactCols > 0) {
       rows.push(
         card(
           "Contact",
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 10,
-              alignItems: "center",
-              justifyItems: "center",
+              gridTemplateColumns: `repeat(${contactCols}, minmax(0, 1fr))`,
+              gap: 8,
             }}
           >
-            <button
-              type="button"
-              aria-label="Call"
-              title="Call"
-              style={
-                !phoneRaw
-                  ? contactRoundBtnMuted
-                  : {
-                      ...contactRoundBtn,
-                      borderColor: canCall ? `${color}` : "#E5E7EB",
-                      boxShadow: canCall ? `0 2px 12px ${color}33` : "none",
-                    }
-              }
-              disabled={!phoneRaw}
-              onClick={() => {
-                if (!phoneRaw) return;
-                if (!canCall) {
-                  onAuthRequired();
-                  return;
-                }
-                window.location.href = telHref;
-              }}
-            >
-              📞
-            </button>
-            <button
-              type="button"
-              aria-label="WhatsApp"
-              title="WhatsApp"
-              style={
-                !waDigits
-                  ? contactRoundBtnMuted
-                  : {
-                      ...contactRoundBtn,
-                      borderColor: canWa ? "#10B981" : "#E5E7EB",
-                      background: canWa ? "#ECFDF5" : "#F3F4F6",
-                    }
-              }
-              disabled={!waDigits}
-              onClick={() => {
-                if (!waDigits) return;
-                if (!canWa) {
-                  onAuthRequired();
-                  return;
-                }
-                window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");
-              }}
-            >
-              💬
-            </button>
-            <button
-              type="button"
-              aria-label="Email"
-              title="Email"
-              style={
-                !emailRaw
-                  ? contactRoundBtnMuted
-                  : {
-                      ...contactRoundBtn,
-                      borderColor: canMail ? "#2563EB" : "#E5E7EB",
-                      background: canMail ? "#EFF6FF" : "#F3F4F6",
-                    }
-              }
-              disabled={!emailRaw}
-              onClick={() => {
-                if (!emailRaw) return;
-                if (!canMail) {
-                  onAuthRequired();
-                  return;
-                }
-                window.location.href = `mailto:${emailRaw}?subject=${encodeURIComponent(
-                  `Re: ${liveMember.name || "TopMLMLeaders"} profile`
-                )}`;
-              }}
-            >
-              ✉️
-            </button>
+            {phoneRaw ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canCall) {
+                    onAuthRequired();
+                    return;
+                  }
+                  window.location.href = telHref;
+                }}
+                style={{
+                  ...contactActionBtn,
+                  border: "1px solid var(--color-border)",
+                  background: "#F3F4F6",
+                  color: "var(--color-text)",
+                }}
+              >
+                📞 Call
+              </button>
+            ) : null}
+            {waDigits ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canWa) {
+                    onAuthRequired();
+                    return;
+                  }
+                  window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");
+                }}
+                style={{
+                  ...contactActionBtn,
+                  border: "1px solid #1ebe57",
+                  background: "#25D366",
+                  color: "#FFFFFF",
+                }}
+              >
+                💬 WhatsApp
+              </button>
+            ) : null}
+            {emailRaw ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canMail) {
+                    onAuthRequired();
+                    return;
+                  }
+                  window.location.href = `mailto:${emailRaw}?subject=${encodeURIComponent(
+                    `Re: ${liveMember.name || "TopMLMLeaders"} profile`
+                  )}`;
+                }}
+                style={{
+                  ...contactActionBtn,
+                  border: "1px solid #6C63FF",
+                  background: "#6C63FF",
+                  color: "#FFFFFF",
+                }}
+              >
+                ✉️ Email
+              </button>
+            ) : null}
           </div>
         )
       );
