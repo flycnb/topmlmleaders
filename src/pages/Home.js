@@ -100,12 +100,12 @@ function Home({
     assistantNote: aiAssistNote,
   } = useAI(user);
 
-  function handleLogout() {
+  async function handleLogout() {
     flushSync(() => {
       setShowUserMenu(false);
       setShowNotifications(false);
     });
-    void onSignOut();
+    await onSignOut();
   }
 
   function timeAgo(value) {
@@ -120,6 +120,10 @@ function Home({
   }
 
   useEffect(() => {
+    if (signingOut || loadingAuth) {
+      return undefined;
+    }
+
     let canceled = false;
     async function loadMembers() {
       setIsLoading(true);
@@ -134,15 +138,19 @@ function Home({
 
         if (error) {
           console.error("[home] members load", error);
-          setMembers([]);
-          setLoadError(true);
+          if (!canceled) {
+            setMembers([]);
+            setLoadError(true);
+          }
           return;
         }
 
         if (!data?.length) {
-          setMembers([]);
+          if (!canceled) setMembers([]);
           return;
         }
+
+        if (canceled) return;
 
         const mapped = mapMembers(data);
         setMembers(sortMembers(mapped));
@@ -150,11 +158,13 @@ function Home({
         if (!canceled) setIsLoading(false);
       }
     }
+
     loadMembers();
+
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [signingOut, loadingAuth]);
 
   useEffect(() => {
     function onResize() {

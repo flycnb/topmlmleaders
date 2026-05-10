@@ -42,6 +42,8 @@ export function useAuth() {
   const [signingOut, setSigningOut] = useState(false);
   const [plan, setPlan] = useState("free");
   const bootstrapDoneRef = useRef(false);
+  /** When true, `signOut()` owns session clearing — ignore duplicate SIGNED_OUT until done. */
+  const manualSignOutRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -87,6 +89,7 @@ export function useAuth() {
       }
 
       if (event === "SIGNED_OUT") {
+        if (manualSignOutRef.current) return;
         applySessionAndFinishBootstrap(null);
         setPlan("free");
         return;
@@ -133,20 +136,21 @@ export function useAuth() {
   }
 
   async function signOut() {
+    manualSignOutRef.current = true;
     setSigningOut(true);
     try {
-      await withTimeout(supabase.auth.signOut({ scope: "global" }), SIGN_OUT_TIMEOUT_MS);
-    } catch {
-    } finally {
       try {
-        await withTimeout(
-          supabase.auth.signOut({ scope: "local" }),
-          LOCAL_SIGN_OUT_TIMEOUT_MS
-        );
+        await withTimeout(supabase.auth.signOut({ scope: "global" }), SIGN_OUT_TIMEOUT_MS);
+      } catch {
+      }
+      try {
+        await withTimeout(supabase.auth.signOut({ scope: "local" }), LOCAL_SIGN_OUT_TIMEOUT_MS);
       } catch {
       }
       setSession(null);
       setPlan("free");
+    } finally {
+      manualSignOutRef.current = false;
       setSigningOut(false);
     }
   }
