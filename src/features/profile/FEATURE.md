@@ -4,6 +4,8 @@ Files: src/features/profile/index.js, src/components/ShareSheet.js, src/componen
 Database: members table, bookings table
 Notes: World class personal website profile with 7 tabs, share sheet, QR download, follow action, Join Us form, and Elite booking flow.
 
+Avatar edit (owner): uploads to Storage bucket **avatars** with object key `{memberId}-{timestamp}.{ext}`; **members.avatar_url** is updated after upload. Storage policies should use **member_id_from_avatar_path** (see `supabase/migrations/20260506120000_storage_avatars.sql` and `docs/BUGS.md` BUG-007).
+
 Run in Supabase SQL editor:
 create table if not exists join_requests (
   id uuid default gen_random_uuid() primary key,

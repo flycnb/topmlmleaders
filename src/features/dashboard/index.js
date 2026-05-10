@@ -409,7 +409,8 @@ function Dashboard({
     setGalleryUploading(true);
     setMediaGalleryStatus("");
     try {
-      let memberId = myMember?.id;
+      let memberRow = myMember;
+      let memberId = memberRow?.id;
       if (!memberId) {
         const insertPayload = {
           ...getMemberPayload(),
@@ -417,19 +418,20 @@ function Dashboard({
         };
         const created = await supabase.from("members").insert(insertPayload).select("*");
         if (created.error || !created.data?.[0]) {
-          setMediaGalleryStatus(
-            created.error
-              ? `Could not create profile: ${created.error.message}`
-              : "Could not create profile. Save your profile on the Profile tab first."
-          );
+          const msg = created.error
+            ? `Could not create profile: ${created.error.message}`
+            : "Could not create profile. Save your profile on the Profile tab first.";
+          console.error("[TICKET-003 gallery] insert member failed", created.error);
+          setMediaGalleryStatus(msg);
           return;
         }
-        setMyMember(created.data[0]);
-        memberId = created.data[0].id;
+        memberRow = created.data[0];
+        memberId = memberRow.id;
+        setMyMember(memberRow);
       }
 
-      const existing = Array.isArray(myMember?.gallery_urls)
-        ? myMember.gallery_urls.filter((u) => typeof u === "string" && u.trim())
+      const existing = Array.isArray(memberRow?.gallery_urls)
+        ? memberRow.gallery_urls.filter((u) => typeof u === "string" && u.trim())
         : [];
       if (existing.length >= MAX_GALLERY_PHOTOS) {
         setMediaGalleryStatus(`Maximum ${MAX_GALLERY_PHOTOS} photos. Delete one to add another.`);
@@ -446,6 +448,7 @@ function Dashboard({
         .upload(path, file, { upsert: false, cacheControl: "3600", contentType });
 
       if (uploadError) {
+        console.error("[TICKET-003 gallery] storage upload failed", uploadError);
         setMediaGalleryStatus(`Upload failed: ${uploadError.message}`);
         return;
       }
@@ -460,12 +463,17 @@ function Dashboard({
         .eq("id", memberId);
 
       if (dbError) {
+        console.error("[TICKET-003 gallery] members update failed", dbError);
         setMediaGalleryStatus(`Photo uploaded but not saved: ${dbError.message}`);
         return;
       }
       setMyMember((prev) => ({ ...prev, gallery_urls: nextGallery }));
-      setMediaGalleryStatus("");
+      setMediaGalleryStatus("✅ Photo added!");
+      window.setTimeout(() => {
+        setMediaGalleryStatus((prev) => (prev === "✅ Photo added!" ? "" : prev));
+      }, 4000);
     } catch (e) {
+      console.error("[TICKET-003 gallery] unexpected", e);
       setMediaGalleryStatus(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setGalleryUploading(false);
@@ -875,7 +883,15 @@ function Dashboard({
             Add photos to showcase on your profile
           </p>
           {mediaGalleryStatus ? (
-            <p style={{ margin: "0 0 10px", fontSize: 13, color: "#DC2626" }}>{mediaGalleryStatus}</p>
+            <p
+              style={{
+                margin: "0 0 10px",
+                fontSize: 13,
+                color: mediaGalleryStatus.startsWith("✅") ? "#059669" : "#DC2626",
+              }}
+            >
+              {mediaGalleryStatus}
+            </p>
           ) : null}
           {galleryUrls.length === 0 ? (
             <p style={{ color: "var(--color-muted)", marginBottom: 12 }}>No photos yet. Upload your first photo!</p>
@@ -945,9 +961,30 @@ function Dashboard({
               padding: "10px 14px",
               fontWeight: 700,
               cursor: galleryUploading || atLimit ? "default" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            {galleryUploading ? "Uploading..." : "Upload Photo"}
+            {galleryUploading ? (
+              <>
+                <span
+                  className="spinner"
+                  style={{
+                    display: "inline-block",
+                    width: 14,
+                    height: 14,
+                    border: "2px solid rgba(255,255,255,0.35)",
+                    borderTopColor: "#FFFFFF",
+                    borderRadius: "50%",
+                  }}
+                  aria-hidden
+                />
+                Uploading...
+              </>
+            ) : (
+              "Upload Photo"
+            )}
           </button>
         </section>
 

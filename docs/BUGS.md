@@ -32,6 +32,33 @@ None
 
 ## ✅ FIXED BUGS
 
+### BUG-007 — Profile / dashboard gallery photo upload (storage + client)
+- **Reported:** May 2026 (TICKET #003)
+- **Actual:** File picker opened but uploads never completed or failed silently; gallery list could stay stale after creating a new member row inline.
+- **Root cause:** Missing or incorrect Supabase **Storage** RLS on `storage.objects` for the **`gallery`** bucket (the ticket’s `INSERT INTO storage.policies` shape is not valid in Postgres — policies are created with `CREATE POLICY` on `storage.objects`). Profile avatar path had no user-visible errors on storage/DB failure.
+- **Fix (app):** Dashboard Media upload uses the inserted member row for `gallery_urls`; logs `[TICKET-003 gallery]` errors to the console; persists URL to `members.gallery_urls` after upload; success and error messages in UI; upload button shows spinner while uploading. Profile avatar upload sets `contentType`, clears the file input, surfaces errors, success toast-style message, spinner while uploading.
+- **Fix (database — run in Supabase SQL Editor):**
+
+```sql
+-- Column for dashboard Media tab (if missing)
+ALTER TABLE public.members
+  ADD COLUMN IF NOT EXISTS gallery_urls jsonb DEFAULT '[]'::jsonb;
+```
+
+Create a **public** bucket named **`gallery`** in Dashboard → Storage (or API). Then add **policies on `storage.objects`** (Storage UI “Policies”, or SQL if your role allows), for example:
+
+- **SELECT** — allow `anon` + `authenticated` to read objects where `bucket_id = 'gallery'` (public gallery URLs).
+- **INSERT** — allow `authenticated` only, with a `WITH CHECK` that the first path segment is a `members.id` owned by the user, e.g.  
+  `bucket_id = 'gallery'`  
+  AND `split_part(name, '/', 1)::uuid = members.id`  
+  AND `members.owner_id = auth.uid()`  
+  (express using `EXISTS (SELECT 1 FROM public.members m WHERE m.id = (split_part(storage.objects.name,'/',1))::uuid AND m.owner_id = auth.uid())` — adjust to match your policy editor).
+
+Avatar uploads use bucket **`avatars`** and keys `{member_uuid}-{timestamp}.ext`; see `supabase/migrations/20260506120000_storage_avatars.sql` for `member_id_from_avatar_path` and policy shapes.
+
+- **Files changed:** `src/features/dashboard/index.js` (Media tab only), `src/features/profile/index.js` (avatar upload only), `docs/BUGS.md`
+- **Verified:** Pending — confirm upload + policy in Supabase on device
+
 ### BUG-001 — Logout button intermittent
 - **Reported:** May 2026
 - **Root cause:** Global `loading` during `signOut` and overlapping UI (menus) made logout feel unresponsive; `signOut` could leave auth state busy if errors occurred.

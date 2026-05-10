@@ -97,6 +97,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const [showQr, setShowQr] = useState(false);
   const [followers, setFollowers] = useState(Number(member?.followerCount ?? member?.follower_count ?? 0));
   const [uploading, setUploading] = useState(false);
+  const [avatarUploadStatus, setAvatarUploadStatus] = useState("");
   const [youtubeInput, setYoutubeInput] = useState(member?.youtubeUrl || member?.youtube_url || "");
   const [joinForm, setJoinForm] = useState({ name: "", wa: "", city: "", experience: "No experience" });
   const [joinStatus, setJoinStatus] = useState("");
@@ -141,20 +142,46 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const team = Array.isArray(liveMember.team) ? liveMember.team : [];
 
   async function onUploadPhoto(event) {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    if (input) input.value = "";
     if (!file || !canEdit || !liveMember.id) return;
+    setAvatarUploadStatus("");
     setUploading(true);
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${liveMember.id}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
-    if (uploadError) {
+    try {
+      const rawExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      const path = `${liveMember.id}-${Date.now()}.${ext}`;
+      const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, cacheControl: "3600", contentType });
+      if (uploadError) {
+        console.error("[TICKET-003 avatar] storage upload failed", uploadError);
+        setAvatarUploadStatus(`Photo upload failed: ${uploadError.message}`);
+        return;
+      }
+      const publicUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+      const { error: dbError } = await supabase
+        .from("members")
+        .update({ avatar_url: publicUrl })
+        .eq("id", liveMember.id);
+      if (dbError) {
+        console.error("[TICKET-003 avatar] members update failed", dbError);
+        setAvatarUploadStatus(`Photo uploaded but not saved: ${dbError.message}`);
+        return;
+      }
+      setLiveMember((prev) => ({ ...prev, avatarUrl: publicUrl }));
+      setAvatarUploadStatus("✅ Profile photo updated!");
+      window.setTimeout(() => {
+        setAvatarUploadStatus((prev) => (prev === "✅ Profile photo updated!" ? "" : prev));
+      }, 4000);
+    } catch (e) {
+      console.error("[TICKET-003 avatar] unexpected", e);
+      setAvatarUploadStatus(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
       setUploading(false);
-      return;
     }
-    const publicUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
-    const { error } = await supabase.from("members").update({ avatar_url: publicUrl }).eq("id", liveMember.id);
-    setUploading(false);
-    if (!error) setLiveMember((prev) => ({ ...prev, avatarUrl: publicUrl }));
   }
 
   async function onSaveYoutube() {
@@ -381,9 +408,60 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
         <div style={{ textAlign: "center" }}>
           <div style={{ width: 120, height: 120, margin: "0 auto", position: "relative" }}>
             {liveMember.avatarUrl ? <img src={liveMember.avatarUrl} alt={liveMember.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover", border: "4px solid #FFFFFF", boxShadow: "0 10px 30px rgba(0,0,0,0.25)" }} /> : <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "rgba(255,255,255,0.22)", border: "4px solid #FFFFFF", boxShadow: "0 10px 30px rgba(0,0,0,0.25)", display: "grid", placeItems: "center", fontSize: 42, fontWeight: 800 }}>{String(liveMember.initials || "ML").slice(0, 2).toUpperCase()}</div>}
-            {canEdit ? <button type="button" onClick={() => fileRef.current?.click()} style={{ position: "absolute", right: 4, bottom: 4, border: "none", borderRadius: "50%", width: 34, height: 34, background: "#FFFFFF" }}>📷</button> : null}
+            {canEdit ? (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                style={{
+                  position: "absolute",
+                  right: 4,
+                  bottom: 4,
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 34,
+                  height: 34,
+                  background: uploading ? "#E5E7EB" : "#FFFFFF",
+                  cursor: uploading ? "default" : "pointer",
+                }}
+              >
+                📷
+              </button>
+            ) : null}
           </div>
-          {uploading ? <div style={{ marginTop: 6 }}>Uploading...</div> : null}
+          {uploading || avatarUploadStatus ? (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                color: uploading ? "#FFFFFF" : avatarUploadStatus.startsWith("✅") ? "#86EFAC" : "#FCA5A5",
+              }}
+            >
+              {uploading ? (
+                <>
+                  <span
+                    className="spinner"
+                    style={{
+                      display: "inline-block",
+                      width: 14,
+                      height: 14,
+                      border: "2px solid rgba(255,255,255,0.35)",
+                      borderTopColor: "#FFFFFF",
+                      borderRadius: "50%",
+                    }}
+                    aria-hidden
+                  />
+                  Uploading...
+                </>
+              ) : (
+                avatarUploadStatus
+              )}
+            </div>
+          ) : null}
           <h1 style={{ margin: "12px 0 4px", fontSize: 28 }}>{liveMember.name} {liveMember.verified ? "✓" : ""}</h1>
           <div style={{ fontSize: 15 }}>{liveMember.role} · {liveMember.company}</div>
           <div style={{ fontSize: 13, marginTop: 6 }}>📍 {liveMember.city}, {liveMember.country}</div>
