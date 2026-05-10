@@ -154,7 +154,16 @@ function Dashboard({
           new Set([...memberIdsFromBookmarks, ...bookingMemberIds])
         );
 
-        const [membersByOwnerRes, bookmarkMemberRes] = await Promise.all([
+        const incomingBookingsPromise =
+          memberRow?.id != null
+            ? supabase
+                .from("bookings")
+                .select("*")
+                .eq("member_id", memberRow.id)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] });
+
+        const [membersByOwnerRes, bookmarkMemberRes, incomingRes] = await Promise.all([
           ownerIdSet.size
             ? supabase
                 .from("members")
@@ -164,6 +173,7 @@ function Dashboard({
           bookmarkOrBookingMemberIds.length
             ? supabase.from("members").select("*").in("id", bookmarkOrBookingMemberIds)
             : Promise.resolve({ data: [] }),
+          incomingBookingsPromise,
         ]);
 
         if (!active) return;
@@ -186,16 +196,7 @@ function Dashboard({
           bookmarks: bookmarkRows.length,
         });
 
-        if (memberRow?.id) {
-          const incomingRes = await supabase
-            .from("bookings")
-            .select("*")
-            .eq("member_id", memberRow.id)
-            .order("created_at", { ascending: false });
-          if (active) setIncomingBookings(incomingRes.data || []);
-        } else {
-          setIncomingBookings([]);
-        }
+        setIncomingBookings(incomingRes.data || []);
 
         setProfileForm({
           name: memberRow?.name || user?.name || "",
