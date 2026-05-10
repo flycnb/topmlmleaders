@@ -18,22 +18,44 @@ function MemberCard({
   isBookmarked,
   onFollow,
   onBookmark,
-  onFlag,
   onChat,
-  onBlockedAction,
+  onRequireLogin,
   onViewProfile,
 }) {
   const badge = planBadge(member.plan);
-  const canOpenWa = member.waVisibility === "public" || isLoggedIn;
-  const slots = Number(member.slots || 0);
 
-  const openWhatsapp = () => {
-    if (!canOpenWa) {
-      onBlockedAction("Login to contact this leader on WhatsApp.");
+  const openWhatsApp = () => {
+    if (!isLoggedIn) {
+      onRequireLogin();
       return;
     }
-    if (!member.wa) return;
+    const canSeeWa = member.waVisibility === "public" || isLoggedIn;
+    if (!canSeeWa || !member.wa) return;
     window.open(`https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`, "_blank", "noopener");
+  };
+
+  const onFollowClick = () => {
+    if (!isLoggedIn) {
+      onRequireLogin();
+      return;
+    }
+    onFollow(member.id);
+  };
+
+  const onBookmarkClick = () => {
+    if (!isLoggedIn) {
+      onRequireLogin();
+      return;
+    }
+    onBookmark(member);
+  };
+
+  const onChatClick = () => {
+    if (!isLoggedIn) {
+      onRequireLogin();
+      return;
+    }
+    onChat(member);
   };
 
   return (
@@ -54,26 +76,10 @@ function MemberCard({
           padding: 10,
           display: "flex",
           alignItems: "flex-start",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           background: `linear-gradient(135deg, ${member.color || "#6C63FF"}, #4338ca)`,
         }}
       >
-        <div>
-          {member.plan === "elite" && slots > 0 ? (
-            <span
-              style={{
-                background: "#10B981",
-                color: "#FFFFFF",
-                borderRadius: 999,
-                fontSize: 11,
-                padding: "4px 8px",
-                fontWeight: 700,
-              }}
-            >
-              📅 {slots} slots
-            </span>
-          ) : null}
-        </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {badge ? (
             <span style={{ background: "rgba(255,255,255,0.2)", color: "#FFFFFF", borderRadius: 999, fontSize: 11, padding: "4px 8px", fontWeight: 700 }}>
@@ -113,7 +119,7 @@ function MemberCard({
             <span style={{ fontSize: 13, color: "var(--color-text)" }}>👤 {member.followerCount.toLocaleString()} followers</span>
             <button
               type="button"
-              onClick={() => onFollow(member.id)}
+              onClick={onFollowClick}
               style={{
                 borderRadius: 999,
                 padding: "7px 14px",
@@ -130,37 +136,24 @@ function MemberCard({
         </div>
 
         <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 10, paddingTop: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
             <button
               type="button"
-              onClick={openWhatsapp}
+              onClick={openWhatsApp}
               style={{ borderRadius: 10, border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
-              💬 WA
+              💬 Message
             </button>
             <button
               type="button"
-              onClick={() => onBookmark(member)}
+              onClick={onBookmarkClick}
               style={{ borderRadius: 10, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
               {isBookmarked ? "🔖 Saved" : "🔖 Bookmark"}
             </button>
             <button
               type="button"
-              onClick={() => onFlag(member)}
-              style={{ borderRadius: 10, border: "1px solid #FECACA", background: "#FFFFFF", color: "#DC2626", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
-            >
-              🚩 Flag
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!isLoggedIn) {
-                  onBlockedAction("Login to start chat.");
-                  return;
-                }
-                onChat(member);
-              }}
+              onClick={onChatClick}
               style={{ borderRadius: 10, border: "1px solid #DBEAFE", background: "#EFF6FF", color: "#2563EB", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
               ✉️ Chat
@@ -180,7 +173,7 @@ function MemberCard({
               background: `linear-gradient(135deg, ${member.color || "#6C63FF"}, #4338ca)`,
             }}
           >
-            {member.plan === "elite" && slots > 0 ? "📅 Book · View Profile →" : "View Profile →"}
+            View Profile →
           </button>
         </div>
       </div>

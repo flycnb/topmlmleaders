@@ -320,10 +320,16 @@ export function useAI(user) {
         return;
       }
 
-      if (!available) return;
+      if (!userMayUseAi(settingsMemo, user)) {
+        setAssistantNote(user?.id ? "AI search is not available for your account right now." : "Please sign in to use AI search.");
+        return;
+      }
 
       const prov = settingsMemo.provider || "claude";
-      if (prov === "off") return;
+      if (prov === "off") {
+        setAssistantNote("AI search is turned off.");
+        return;
+      }
 
       if (prov === "gemini") {
         setAssistantNote("Gemini coming soon");
@@ -382,7 +388,7 @@ export function useAI(user) {
         setLoading(false);
       }
     },
-    [available, settingsMemo.provider]
+    [settingsMemo, user]
   );
 
   return { ask, loading, available, filters, clearAiFilters, bannerQuery, assistantNote };

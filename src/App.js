@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import "./App.css";
 import Home from "./pages/Home";
-import MemberProfile from "./features/profile";
+import ProfilePage from "./pages/ProfilePage";
 import Dashboard from "./features/dashboard";
 import AdminPanel from "./features/admin";
 import AuthModal from "./features/auth";
@@ -9,15 +10,19 @@ import ChatModal from "./components/ChatModal";
 import { useAuth } from "./features/auth/useAuth";
 import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
-import FlagModal from "./features/flags/FlagModal";
 
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
 
-function App() {
-  const [currentScreen, setCurrentScreen] = useState("home");
-  const [selectedMember, setSelectedMember] = useState(null);
+function profilePathFromMember(member) {
+  if (!member) return "/";
+  const slug = member.slug && String(member.slug).trim();
+  if (slug) return `/u/${encodeURIComponent(slug)}`;
+  return `/u/${encodeURIComponent(member.id)}`;
+}
+
+function AppRoutes() {
+  const navigate = useNavigate();
   const [showAuth, setShowAuth] = useState(false);
-  const [flagMember, setFlagMember] = useState(null);
   const [chatMember, setChatMember] = useState(null);
   const { user, loading, oauthRedirecting, signingOut, signInWithGoogle, signOut } = useAuth();
   const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
@@ -25,15 +30,18 @@ function App() {
   const hadUserRef = useRef(false);
 
   useEffect(() => {
-    const hasUser = Boolean(user?.id);
-    if (hasUser && !hadUserRef.current) {
-      setCurrentScreen("home");
-      setSelectedMember(null);
-      setShowAuth(false);
-      setFlagMember(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("code")) {
+      window.history.replaceState({}, "", `${url.pathname}${url.hash}`);
     }
-    hadUserRef.current = hasUser;
-  }, [user?.id]);
+  }, []);
+
+  useEffect(() => {
+    if (hadUserRef.current && !user?.id) {
+      navigate("/", { replace: true });
+    }
+    hadUserRef.current = Boolean(user?.id);
+  }, [user?.id, navigate]);
 
   function onAuthRequired() {
     setShowAuth(true);
@@ -51,111 +59,112 @@ function App() {
     setChatMember(null);
   }
 
-  if (currentScreen === "home") {
-    return (
-      <>
-        <Home
-          user={user}
-          loadingAuth={loading}
-          signingOut={signingOut}
-          onSignOut={signOut}
-          onAuthRequired={onAuthRequired}
-          isFollowing={isFollowing}
-          toggleFollow={toggleFollow}
-          isBookmarked={isBookmarked}
-          toggleBookmark={toggleBookmark}
-          onFlagMember={setFlagMember}
-          onOpenChat={openChat}
-          onOpenDashboard={() => setCurrentScreen("dashboard")}
-          onOpenAdmin={() => setCurrentScreen("admin")}
-          onOpenProfile={(member) => {
-            setSelectedMember(member);
-            setCurrentScreen("profile");
-          }}
-        />
-        <AuthModal
-          open={showAuth}
-          onClose={() => setShowAuth(false)}
-          signInWithGoogle={signInWithGoogle}
-          loading={oauthRedirecting || loading}
-        />
-        <FlagModal
-          open={Boolean(flagMember)}
-          onClose={() => setFlagMember(null)}
-          user={user}
-          member={flagMember}
-          onAuthRequired={onAuthRequired}
-        />
-        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
-      </>
-    );
-  }
+  const openProfile = (member) => {
+    navigate(profilePathFromMember(member));
+  };
 
-  if (currentScreen === "dashboard") {
-    return (
-      <>
-        <Dashboard
-          user={user}
-          authInitializing={loading}
-          onBack={() => setCurrentScreen("home")}
-          onOpenChat={openChat}
-          onOpenProfile={(member) => {
-            setSelectedMember(member);
-            setCurrentScreen("profile");
-          }}
-          onSignOut={signOut}
-        />
-        <AuthModal
-          open={showAuth}
-          onClose={() => setShowAuth(false)}
-          signInWithGoogle={signInWithGoogle}
-          loading={oauthRedirecting || loading}
-        />
-        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
-      </>
-    );
-  }
+  const sharedModals = (
+    <>
+      <AuthModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        signInWithGoogle={signInWithGoogle}
+        loading={oauthRedirecting || loading}
+      />
+      <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
+    </>
+  );
 
-  if (currentScreen === "profile") {
-    return (
-      <>
-        <MemberProfile
-          member={selectedMember}
-          user={user}
-          onAuthRequired={onAuthRequired}
-          isFollowing={isFollowing}
-          toggleFollow={toggleFollow}
-          onOpenChat={openChat}
-          onBack={() => setCurrentScreen("home")}
+  return (
+    <>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              <Home
+                user={user}
+                loadingAuth={loading}
+                signingOut={signingOut}
+                onSignOut={signOut}
+                onAuthRequired={onAuthRequired}
+                isFollowing={isFollowing}
+                toggleFollow={toggleFollow}
+                isBookmarked={isBookmarked}
+                toggleBookmark={toggleBookmark}
+                onOpenChat={openChat}
+                onOpenDashboard={() => navigate("/dashboard")}
+                onOpenAdmin={() => navigate("/admin")}
+                onOpenProfile={openProfile}
+              />
+              {sharedModals}
+            </>
+          }
         />
-        <AuthModal
-          open={showAuth}
-          onClose={() => setShowAuth(false)}
-          signInWithGoogle={signInWithGoogle}
-          loading={oauthRedirecting || loading}
+        <Route
+          path="/dashboard"
+          element={
+            <>
+              <Dashboard
+                user={user}
+                authInitializing={loading}
+                onBack={() => navigate("/")}
+                onOpenChat={openChat}
+                onOpenProfile={openProfile}
+                onSignOut={signOut}
+              />
+              {sharedModals}
+            </>
+          }
         />
-        <ChatModal open={Boolean(chatMember)} onClose={closeChat} user={user} member={chatMember} />
-      </>
-    );
-  }
-
-  if (currentScreen === "admin") {
-    if (!ADMIN_EMAIL || user?.email !== ADMIN_EMAIL) {
-      return (
-        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, textAlign: "center" }}>
-          <div>
-            <h2>Admin access denied</h2>
-            <button type="button" onClick={() => setCurrentScreen("home")} style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "10px 16px", cursor: "pointer" }}>
-              Back to Home
-            </button>
-          </div>
-        </main>
-      );
-    }
-    return <AdminPanel user={user} onBack={() => setCurrentScreen("home")} />;
-  }
-
-  return <main style={{ padding: 24 }}>Unknown screen</main>;
+        <Route
+          path="/u/:slug"
+          element={
+            <>
+              <ProfilePage
+                user={user}
+                onAuthRequired={onAuthRequired}
+                isFollowing={isFollowing}
+                toggleFollow={toggleFollow}
+                onOpenChat={openChat}
+              />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <>
+              {!ADMIN_EMAIL || user?.email !== ADMIN_EMAIL ? (
+                <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, textAlign: "center" }}>
+                  <div>
+                    <h2>Admin access denied</h2>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/", { replace: true })}
+                      style={{ border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", fontWeight: 700, padding: "10px 16px", cursor: "pointer" }}
+                    >
+                      Back to Home
+                    </button>
+                  </div>
+                </main>
+              ) : (
+                <AdminPanel user={user} onBack={() => navigate("/")} />
+              )}
+              {sharedModals}
+            </>
+          }
+        />
+      </Routes>
+    </>
+  );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}

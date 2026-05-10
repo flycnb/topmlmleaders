@@ -68,9 +68,6 @@ export function useAuth() {
 
       if (event === "SIGNED_IN") {
         applySessionAndFinishBootstrap(nextSession);
-        if (window.location.search.includes("code=")) {
-          window.location.replace("/");
-        }
         const nextUser = nextSession?.user;
         if (nextUser?.id) {
           const email = nextUser.email || "";
@@ -123,10 +120,11 @@ export function useAuth() {
   async function signInWithGoogle() {
     setOauthRedirecting(true);
     try {
+      const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: returnTo || `${window.location.origin}/`,
           queryParams: {
             access_type: "offline",
             prompt: "consent",
