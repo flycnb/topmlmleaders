@@ -9,8 +9,61 @@ const SLOT_DAYS = [
   { label: "Tomorrow", slots: [{ id: "n1", time: "4:00 PM", type: "WA Video", booked: false }, { id: "n2", time: "7:00 PM", type: "In-Person", booked: false }] },
 ];
 
+/** Normalize jsonb `badges` from Supabase into display labels (strings). */
+function badgeLabelsFromBadges(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const label = item.label ?? item.name ?? item.title ?? item.text;
+          if (label != null && String(label).trim()) return String(label).trim();
+        }
+        return String(item ?? "").trim();
+      })
+      .filter(Boolean);
+  }
+  if (typeof raw === "object") {
+    const fromFlags = Object.entries(raw)
+      .filter(([, v]) => v === true || v === 1 || v === "true" || v === "1")
+      .map(([k]) => k.replace(/_/g, " "));
+    if (fromFlags.length) return fromFlags;
+    if (Array.isArray(raw.items)) return badgeLabelsFromBadges(raw.items);
+  }
+  return [];
+}
+
+function formatJoinedDateDisplay(value) {
+  if (value == null || value === "") return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function formatEarningsDisplay(value) {
+  if (value == null || value === "") return "";
+  if (typeof value === "number" && !Number.isNaN(value)) return value.toLocaleString();
+  return String(value);
+}
+
 function normalizeMember(member) {
   if (!member) return null;
+  const description =
+    member.description != null && member.description !== "" ? String(member.description).trim() : "";
+  const teamSize =
+    member.teamSize !== undefined && member.teamSize !== null && member.teamSize !== ""
+      ? member.teamSize
+      : member.team_size !== undefined && member.team_size !== null && member.team_size !== ""
+        ? member.team_size
+        : "";
+  const earnings = member.earnings !== undefined && member.earnings !== null ? member.earnings : "";
+  const joinedDate =
+    member.joinedDate != null && member.joinedDate !== ""
+      ? member.joinedDate
+      : member.joined_date != null && member.joined_date !== ""
+        ? member.joined_date
+        : "";
+
   return {
     ...member,
     ownerId: member.ownerId || member.owner_id || "",
@@ -20,6 +73,11 @@ function normalizeMember(member) {
     youtubeUrl: member.youtubeUrl || member.youtube_url || "",
     phoneVisibility: member.phoneVisibility || member.phone_visibility || "private",
     waVisibility: member.waVisibility || member.wa_visibility || "private",
+    description,
+    teamSize,
+    earnings,
+    joinedDate,
+    badges: badgeLabelsFromBadges(member.badges),
   };
 }
 
@@ -56,6 +114,21 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     setFollowers(Number(normalized.followerCount || 0));
     setYoutubeInput(normalized.youtubeUrl || "");
   }, [member]);
+
+  useEffect(() => {
+    const id = member?.id;
+    if (!id) return undefined;
+    let canceled = false;
+    (async () => {
+      const { data, error } = await supabase.from("members").select("*").eq("id", id).maybeSingle();
+      if (canceled || error || !data) return;
+      setLiveMember((prev) => normalizeMember({ ...prev, ...data }) || {});
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [member?.id]);
+
   useEffect(() => setBookingName(user?.name || ""), [user?.name]);
 
   const canEdit = Boolean(user?.id && user.id === liveMember.ownerId);
@@ -140,6 +213,66 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
 
   function renderAbout() {
     const rows = [];
+    const hasTeam =
+      liveMember.teamSize !== undefined &&
+      liveMember.teamSize !== null &&
+      String(liveMember.teamSize).trim() !== "";
+    const hasEarnings =
+      liveMember.earnings !== undefined &&
+      liveMember.earnings !== null &&
+      String(liveMember.earnings).trim() !== "";
+    const hasJoined = Boolean(liveMember.joinedDate);
+    if (hasTeam || hasEarnings || hasJoined) {
+      rows.push(
+        card(
+          "Snapshot",
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 14 }}>
+            {hasTeam ? (
+              <div>
+                <div style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>Team size</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{String(liveMember.teamSize)}</div>
+              </div>
+            ) : null}
+            {hasEarnings ? (
+              <div>
+                <div style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>Earnings</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{formatEarningsDisplay(liveMember.earnings)}</div>
+              </div>
+            ) : null}
+            {hasJoined ? (
+              <div>
+                <div style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>Member since</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{formatJoinedDateDisplay(liveMember.joinedDate)}</div>
+              </div>
+            ) : null}
+          </div>
+        )
+      );
+    }
+    if (Array.isArray(liveMember.badges) && liveMember.badges.length) {
+      rows.push(
+        card(
+          "Badges",
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {liveMember.badges.map((label, index) => (
+              <span
+                key={`${label}-${index}`}
+                style={{
+                  borderRadius: 999,
+                  padding: "6px 12px",
+                  background: "#EEF2FF",
+                  color: "var(--color-primary)",
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )
+      );
+    }
     if (liveMember.description) rows.push(card("About Me", <p style={{ margin: 0, lineHeight: 1.7 }}>{liveMember.description}</p>));
     if (phoneAllowed || waAllowed) {
       rows.push(
