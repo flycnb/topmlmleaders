@@ -105,7 +105,6 @@ export default function Board({ user, onAuthRequired }) {
     const { data: rows, error } = await query;
 
     if (error) {
-      console.error(error);
       if (reset) setPosts([]);
       setHasMore(false);
       return { ok: false };

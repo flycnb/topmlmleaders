@@ -278,9 +278,9 @@ export function useAI(user) {
   useEffect(() => {
     let active = true;
     async function load() {
-      const { data, error } = await supabase.from("ai_settings").select("provider, available_to").limit(1).maybeSingle();
+      const { data } = await supabase.from("ai_settings").select("provider, available_to").limit(1).maybeSingle();
       if (!active) return;
-      if (error || !data) {
+      if (!data) {
         setProvider(DEFAULT_SETTINGS.provider);
         setAvailableTo(DEFAULT_SETTINGS.available_to);
         return;
