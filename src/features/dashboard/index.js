@@ -45,6 +45,38 @@ function slugify(text) {
     .replace(/\s+/g, "-");
 }
 
+/** Reject if `promise` does not settle within `ms` (avoids hung Supabase calls leaving UI stuck). */
+function withTimeout(promise, ms, label = "Request") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+        ms
+      );
+    }),
+  ]);
+}
+
+/** Normalize `members.gallery_urls` (jsonb array or legacy string) into string URLs. */
+function normalizeGalleryUrls(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((u) => typeof u === "string" && u.trim());
+  }
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u) => typeof u === "string" && u.trim());
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return [];
+}
+
 /** Parse YouTube watch/embed/shorts URLs for thumbnail preview. */
 function extractYoutubeVideoId(raw) {
   const s = String(raw || "").trim();
@@ -383,9 +415,11 @@ function Dashboard({
       const path = `${memberId}-${Date.now()}.${ext}`;
       const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(path, file, { upsert: true, cacheControl: "3600", contentType });
+      const { error: uploadError } = await withTimeout(
+        supabase.storage.from("avatars").upload(path, file, { upsert: true, cacheControl: "3600", contentType }),
+        120000,
+        "Avatar upload"
+      );
 
       if (uploadError) {
         setSaveStatus(`Upload failed: ${uploadError.message}`);
@@ -394,13 +428,26 @@ function Dashboard({
 
       const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
-      const { error: dbError } = await supabase
-        .from("members")
-        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-        .eq("id", memberId);
+      const { data: updatedMember, error: dbError } = await withTimeout(
+        supabase
+          .from("members")
+          .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+          .eq("id", memberId)
+          .select("id, avatar_url")
+          .maybeSingle(),
+        30000,
+        "Saving avatar URL"
+      );
 
       if (dbError) {
         setSaveStatus(`Photo uploaded but profile not updated: ${dbError.message}`);
+        return;
+      }
+      if (!updatedMember) {
+        console.error("[dashboard avatar] members update matched 0 rows (RLS or missing row)", { memberId });
+        setSaveStatus(
+          "Photo uploaded to storage but the profile row could not be updated. Check Members table UPDATE policy for your user and the avatar_url column."
+        );
         return;
       }
       setMyMember((prev) => ({ ...prev, avatar_url: publicUrl }));
@@ -442,9 +489,7 @@ function Dashboard({
         setMyMember(memberRow);
       }
 
-      const existing = Array.isArray(memberRow?.gallery_urls)
-        ? memberRow.gallery_urls.filter((u) => typeof u === "string" && u.trim())
-        : [];
+      const existing = normalizeGalleryUrls(memberRow?.gallery_urls);
       if (existing.length >= MAX_GALLERY_PHOTOS) {
         setMediaGalleryStatus(`Maximum ${MAX_GALLERY_PHOTOS} photos. Delete one to add another.`);
         return;
@@ -455,9 +500,11 @@ function Dashboard({
       const path = `${memberId}/${Date.now()}.${ext}`;
       const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("gallery")
-        .upload(path, file, { upsert: false, cacheControl: "3600", contentType });
+      const { error: uploadError } = await withTimeout(
+        supabase.storage.from("gallery").upload(path, file, { upsert: false, cacheControl: "3600", contentType }),
+        120000,
+        "Gallery file upload"
+      );
 
       if (uploadError) {
         console.error("[TICKET-003 gallery] storage upload failed", uploadError);
@@ -469,17 +516,31 @@ function Dashboard({
       const publicUrl = urlData.publicUrl;
       const nextGallery = [...existing, publicUrl].slice(0, MAX_GALLERY_PHOTOS);
 
-      const { error: dbError } = await supabase
-        .from("members")
-        .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
-        .eq("id", memberId);
+      const { data: updatedMember, error: dbError } = await withTimeout(
+        supabase
+          .from("members")
+          .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
+          .eq("id", memberId)
+          .select("id, gallery_urls")
+          .maybeSingle(),
+        30000,
+        "Saving gallery URLs"
+      );
 
       if (dbError) {
         console.error("[TICKET-003 gallery] members update failed", dbError);
         setMediaGalleryStatus(`Photo uploaded but not saved: ${dbError.message}`);
         return;
       }
-      setMyMember((prev) => ({ ...prev, gallery_urls: nextGallery }));
+      if (!updatedMember) {
+        console.error("[TICKET-003 gallery] members update matched 0 rows (RLS or missing row)", { memberId });
+        setMediaGalleryStatus(
+          "Photo is in storage but could not update your profile. Add a `gallery_urls` jsonb column on `members` and allow authenticated owners to UPDATE their row."
+        );
+        return;
+      }
+      const savedUrls = normalizeGalleryUrls(updatedMember.gallery_urls);
+      setMyMember((prev) => ({ ...prev, gallery_urls: savedUrls.length ? savedUrls : nextGallery }));
       setMediaGalleryStatus("✅ Photo added!");
       window.setTimeout(() => {
         setMediaGalleryStatus((prev) => (prev === "✅ Photo added!" ? "" : prev));
@@ -495,19 +556,29 @@ function Dashboard({
   async function deleteGalleryPhoto(url) {
     if (!myMember?.id || !url) return;
     setMediaGalleryStatus("");
-    const existing = Array.isArray(myMember.gallery_urls)
-      ? myMember.gallery_urls.filter((u) => typeof u === "string")
-      : [];
+    const existing = normalizeGalleryUrls(myMember.gallery_urls);
     const nextGallery = existing.filter((u) => u !== url);
-    const { error } = await supabase
-      .from("members")
-      .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
-      .eq("id", myMember.id);
+    const { data: updatedMember, error } = await withTimeout(
+      supabase
+        .from("members")
+        .update({ gallery_urls: nextGallery, updated_at: new Date().toISOString() })
+        .eq("id", myMember.id)
+        .select("gallery_urls")
+        .maybeSingle(),
+      30000,
+      "Removing gallery photo"
+    );
     if (error) {
       setMediaGalleryStatus(error.message || "Could not remove photo.");
       return;
     }
-    setMyMember((prev) => (prev ? { ...prev, gallery_urls: nextGallery } : prev));
+    if (!updatedMember) {
+      setMediaGalleryStatus("Could not remove photo (no permission or row missing).");
+      return;
+    }
+    setMyMember((prev) =>
+      prev ? { ...prev, gallery_urls: normalizeGalleryUrls(updatedMember.gallery_urls) } : prev
+    );
   }
 
   async function saveYoutubeVideos() {
@@ -882,9 +953,7 @@ function Dashboard({
   }
 
   function renderMedia() {
-    const galleryUrls = Array.isArray(myMember?.gallery_urls)
-      ? myMember.gallery_urls.filter((u) => typeof u === "string" && u.trim())
-      : [];
+    const galleryUrls = normalizeGalleryUrls(myMember?.gallery_urls);
     const atLimit = galleryUrls.length >= MAX_GALLERY_PHOTOS;
 
     return (
