@@ -10,6 +10,7 @@ import ChatModal from "./components/ChatModal";
 import { useAuth } from "./features/auth/useAuth";
 import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
+import { supabase } from "./lib/supabaseClient";
 
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
 
@@ -31,9 +32,38 @@ function AppRoutes() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has("code")) {
-      window.history.replaceState({}, "", `${url.pathname}${url.hash}`);
+    if (!url.searchParams.has("code")) return undefined;
+
+    let cleaned = false;
+    function stripOAuthParamsFromUrl() {
+      if (cleaned) return;
+      const u = new URL(window.location.href);
+      if (!u.searchParams.has("code")) {
+        cleaned = true;
+        return;
+      }
+      u.searchParams.delete("code");
+      u.searchParams.delete("state");
+      const qs = u.searchParams.toString();
+      window.history.replaceState({}, "", `${u.pathname}${qs ? `?${qs}` : ""}${u.hash}`);
+      cleaned = true;
     }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "INITIAL_SESSION" && event !== "SIGNED_IN") return;
+      if (!session) return;
+      queueMicrotask(stripOAuthParamsFromUrl);
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) queueMicrotask(stripOAuthParamsFromUrl);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
