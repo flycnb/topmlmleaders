@@ -852,7 +852,7 @@ function Dashboard({
     if (!user?.id || !myMember?.id || !productId) return;
     const { error } = await supabase
       .from("products")
-      .update({ pdf_url: null, updated_at: new Date().toISOString() })
+      .update({ pdf_url: null })
       .eq("id", productId)
       .eq("member_id", myMember.id);
     if (error) {
@@ -903,7 +903,7 @@ function Dashboard({
       const publicUrl = urlData.publicUrl;
       const { data: updated, error } = await supabase
         .from("products")
-        .update({ pdf_url: publicUrl, updated_at: new Date().toISOString() })
+        .update({ pdf_url: publicUrl })
         .eq("id", pid)
         .eq("member_id", myMember.id)
         .select("id, pdf_url")
