@@ -15,15 +15,8 @@ function mapUser(session, plan = "free") {
 }
 
 const SESSION_FALLBACK_MS = 400;
-const SIGN_OUT_TIMEOUT_MS = 8000;
-const LOCAL_SIGN_OUT_TIMEOUT_MS = 3000;
-
-function withTimeout(promise, timeoutMs) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => window.setTimeout(resolve, timeoutMs)),
-  ]);
-}
+/** Entire sign-out (remote + local attempts) stops waiting after this. */
+const SIGN_OUT_MAX_MS = 5000;
 
 export async function signInWithEmailPassword(email, password) {
   const trimmed = String(email || "").trim();
@@ -139,14 +132,21 @@ export function useAuth() {
     manualSignOutRef.current = true;
     setSigningOut(true);
     try {
-      try {
-        await withTimeout(supabase.auth.signOut({ scope: "global" }), SIGN_OUT_TIMEOUT_MS);
-      } catch {
-      }
-      try {
-        await withTimeout(supabase.auth.signOut({ scope: "local" }), LOCAL_SIGN_OUT_TIMEOUT_MS);
-      } catch {
-      }
+      await Promise.race([
+        (async () => {
+          try {
+            await supabase.auth.signOut({ scope: "global" });
+          } catch {
+            /* ignore */
+          }
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {
+            /* ignore */
+          }
+        })(),
+        new Promise((resolve) => window.setTimeout(resolve, SIGN_OUT_MAX_MS)),
+      ]);
       setSession(null);
       setPlan("free");
     } finally {

@@ -124,33 +124,47 @@ function Home({
       return undefined;
     }
 
+    const MEMBERS_FETCH_TIMEOUT_MS = 8000;
+
     let canceled = false;
     async function loadMembers() {
       setIsLoading(true);
       setLoadError(false);
       try {
-        const { data, error } = await supabase
+        const queryPromise = supabase
           .from("members")
           .select("*")
-          .order("follower_count", { ascending: false, nullsFirst: false });
+          .order("follower_count", { ascending: false, nullsFirst: false })
+          .then((res) => ({ kind: "result", res }));
+
+        const timeoutPromise = new Promise((resolve) =>
+          window.setTimeout(() => resolve({ kind: "timeout" }), MEMBERS_FETCH_TIMEOUT_MS)
+        );
+
+        const outcome = await Promise.race([queryPromise, timeoutPromise]);
 
         if (canceled) return;
 
+        if (outcome.kind === "timeout") {
+          console.warn("[home] members load timed out after 8s — showing empty directory");
+          setMembers([]);
+          setLoadError(false);
+          return;
+        }
+
+        const { data, error } = outcome.res;
+
         if (error) {
           console.error("[home] members load", error);
-          if (!canceled) {
-            setMembers([]);
-            setLoadError(true);
-          }
+          setMembers([]);
+          setLoadError(true);
           return;
         }
 
         if (!data?.length) {
-          if (!canceled) setMembers([]);
+          setMembers([]);
           return;
         }
-
-        if (canceled) return;
 
         const mapped = mapMembers(data);
         setMembers(sortMembers(mapped));
