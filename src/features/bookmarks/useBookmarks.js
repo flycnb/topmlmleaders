@@ -1,6 +1,50 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
+/**
+ * Insert bookmark can 409 / unique-violate when row already exists (stale UI or race).
+ * PostgrestError has no HTTP status field; duplicate is usually code "23505" on message/details.
+ */
+function isBookmarkDuplicateInsertError(error) {
+  if (!error) return false;
+  if (typeof error === "object") {
+    const code = String(error.code ?? "").trim();
+    if (code === "23505" || code === "409") return true;
+    const st = Number(error.status ?? error.statusCode);
+    if (Number.isFinite(st) && st === 409) return true;
+  }
+  const parts = [];
+  if (typeof error === "object") {
+    for (const key of ["message", "details", "hint"]) {
+      const v = error[key];
+      if (v != null && v !== "") parts.push(String(v));
+    }
+    const cause = error.cause;
+    if (cause && typeof cause === "object") {
+      for (const key of ["message", "details", "hint", "code"]) {
+        const v = cause[key];
+        if (v != null && v !== "") parts.push(String(v));
+      }
+    }
+  } else {
+    parts.push(String(error));
+  }
+  const text = parts.join(" ").toLowerCase();
+  if (
+    /\b23505\b/.test(text) ||
+    /duplicate key|unique constraint|already exists|violates unique constraint|conflict with/i.test(text)
+  ) {
+    return true;
+  }
+  try {
+    const dumped = JSON.stringify(error).toLowerCase();
+    if (dumped.includes("23505") || dumped.includes('"code":"23505"')) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 export function useBookmarks(user, onAuthRequired) {
   const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -73,14 +117,7 @@ export function useBookmarks(user, onAuthRequired) {
     });
     if (error) {
       // Duplicate bookmark: treat as success (keep optimistic UI; no rollback / no surfaced error).
-      const msg = String(error.message || error.details || "");
-      const status = Number(error.status ?? error.statusCode);
-      const isConflict =
-        error.code === "23505" ||
-        error.code === "409" ||
-        status === 409 ||
-        /duplicate|unique constraint|already exists|conflict/i.test(msg);
-      if (isConflict) return;
+      if (isBookmarkDuplicateInsertError(error)) return;
       setBookmarkedIds((prev) => {
         const next = new Set(prev);
         next.delete(memberId);
