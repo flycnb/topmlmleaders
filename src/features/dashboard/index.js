@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../../lib/supabaseClient";
 import { useNotifications } from "../notifications/useNotifications";
+import { mapMembers } from "../search";
 
 /*
  * TICKET-011 — Run in Supabase SQL Editor once if columns/bucket missing:
@@ -1173,21 +1174,29 @@ function Dashboard({
     });
   }, [conversations, membersById, user?.id]);
 
-  async function openConversation(row) {
-    if (row.otherMember) onOpenChat(row.otherMember);
+  function openConversation(row) {
+    const om = row.otherMember;
+    if (!om) return;
+    if (om.id) {
+      const mapped = mapMembers([om])[0];
+      onOpenChat(mapped || om);
+      return;
+    }
+    onOpenChat(om);
   }
 
   const loadMessageUnreadCount = useCallback(
     async (conversationId) => {
+      if (!myMember?.id) return 0;
       const { count } = await supabase
         .from("messages")
         .select("*", { count: "exact", head: true })
         .eq("conversation_id", conversationId)
-        .neq("sender_id", user?.id)
+        .neq("sender_id", myMember.id)
         .eq("read", false);
       return count || 0;
     },
-    [user?.id]
+    [myMember?.id]
   );
 
   const [unreadMessageCounts, setUnreadMessageCounts] = useState({});

@@ -78,6 +78,7 @@ function Home({
   onOpenDashboard,
   onOpenAdmin,
   onOpenProfile,
+  onMessageNotificationOpen,
 }) {
   const [activeTab, setActiveTab] = useState("directory");
   const [searchTerm, setSearchTerm] = useState("");
@@ -576,6 +577,9 @@ function Home({
                             onClick={async () => {
                               await markOneRead(item.id);
                               setShowNotifications(false);
+                              if (item.type === "message") {
+                                await onMessageNotificationOpen?.(item);
+                              }
                             }}
                             style={{
                               textAlign: "left",

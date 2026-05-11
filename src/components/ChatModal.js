@@ -123,7 +123,7 @@ function ChatModal({ open, onClose, user, member }) {
                 fontWeight: 800,
               }}
             >
-              {String(member["initials"] || "ML").slice(0, 2)}
+              {String(member["initials"] || member.photo_initials || "ML").slice(0, 2)}
             </div>
             <div>
               <div style={{ fontWeight: 700 }}>{member.name}</div>

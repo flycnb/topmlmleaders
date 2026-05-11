@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
 function sortIds(a, b) {
   return String(a) < String(b) ? [a, b] : [b, a];
+}
+
+/** Raw `members` rows use `owner_id`; mapped directory objects use `ownerId`. */
+function peerAuthId(member) {
+  if (!member || typeof member !== "object") return "";
+  return String(member.ownerId || member.owner_id || "").trim();
 }
 
 export function useChat(user, member) {
@@ -11,7 +17,8 @@ export function useChat(user, member) {
   const [loading, setLoading] = useState(false);
   const [myMemberId, setMyMemberId] = useState(null);
   const [myMemberResolved, setMyMemberResolved] = useState(false);
-  const peerMissing = !member?.ownerId;
+  const peerOwnerId = peerAuthId(member);
+  const peerMissing = !peerOwnerId;
   /** Logged in but no members row for this auth user — cannot satisfy messages.sender_id → members FK. */
   const senderMissing = Boolean(user?.id) && myMemberResolved && !myMemberId;
 
@@ -44,7 +51,7 @@ export function useChat(user, member) {
     let loadTimeoutId = null;
 
     async function setupConversation() {
-      if (!user?.id || !member?.ownerId || user.id === member.ownerId) {
+      if (!user?.id || !peerOwnerId || user.id === peerOwnerId) {
         setConversationId(null);
         setMessages([]);
         setLoading(false);
@@ -60,7 +67,7 @@ export function useChat(user, member) {
       }, 5000);
 
       try {
-        const [member1Id, member2Id] = sortIds(user.id, member.ownerId);
+        const [member1Id, member2Id] = sortIds(user.id, peerOwnerId);
 
         let conversation = null;
         const existing = await supabase
@@ -133,7 +140,7 @@ export function useChat(user, member) {
       active = false;
       if (loadTimeoutId != null) window.clearTimeout(loadTimeoutId);
     };
-  }, [user?.id, member?.ownerId]);
+  }, [user?.id, peerOwnerId]);
 
   const markAsRead = useCallback(async () => {
     if (!conversationId || !myMemberId) return;
@@ -145,10 +152,23 @@ export function useChat(user, member) {
       .eq("read", false);
   }, [conversationId, myMemberId]);
 
+  const markAsReadRef = useRef(markAsRead);
+  markAsReadRef.current = markAsRead;
+
   useEffect(() => {
     if (!conversationId) return undefined;
 
-    markAsRead();
+    markAsReadRef.current();
+
+    async function refetchMessages() {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      if (!error) setMessages(data || []);
+      markAsReadRef.current();
+    }
 
     const channel = supabase
       .channel(`messages:${conversationId}`)
@@ -160,14 +180,32 @@ export function useChat(user, member) {
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
-        async () => {
-          const messageRes = await supabase
-            .from("messages")
-            .select("*")
-            .eq("conversation_id", conversationId)
-            .order("created_at", { ascending: true });
-          setMessages(messageRes.data || []);
-          markAsRead();
+        (payload) => {
+          const eventType = String(payload.eventType || payload.event_type || "").toUpperCase();
+          if (eventType === "INSERT" && payload.new) {
+            const row = payload.new;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === row.id)) return prev;
+              const next = [...prev, row].sort(
+                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              );
+              return next;
+            });
+            void markAsReadRef.current();
+            return;
+          }
+          if (eventType === "UPDATE" && payload.new) {
+            const row = payload.new;
+            setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+            void markAsReadRef.current();
+            return;
+          }
+          if (eventType === "DELETE" && payload.old) {
+            const id = payload.old.id;
+            setMessages((prev) => prev.filter((m) => m.id !== id));
+            return;
+          }
+          void refetchMessages();
         }
       )
       .subscribe();
@@ -175,7 +213,7 @@ export function useChat(user, member) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, markAsRead]);
+  }, [conversationId]);
 
   const sendMessage = useCallback(
     async (text) => {

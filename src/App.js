@@ -11,6 +11,7 @@ import { useAuth } from "./features/auth/useAuth";
 import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
 import { supabase } from "./lib/supabaseClient";
+import { mapMembers } from "./features/search";
 
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
 
@@ -89,6 +90,40 @@ function AppRoutes() {
     setChatMember(null);
   }
 
+  function isUuidSegment(segment) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(segment || ""));
+  }
+
+  async function openChatFromMessageNotification(item) {
+    if (!item || item.type !== "message") return;
+    const raw = String(item.link || "").trim();
+    let segment = raw
+      .replace(/^#\/m\//i, "")
+      .replace(/^#\/u\//i, "")
+      .replace(/^\/u\//i, "")
+      .replace(/^\//, "")
+      .split("?")[0]
+      .split("#")[0];
+    if (!segment) return;
+    try {
+      segment = decodeURIComponent(segment);
+    } catch {
+      /* ignore */
+    }
+    let row = null;
+    if (isUuidSegment(segment)) {
+      const { data } = await supabase.from("members").select("*").eq("id", segment).maybeSingle();
+      row = data;
+    }
+    if (!row) {
+      const { data } = await supabase.from("members").select("*").eq("slug", segment).maybeSingle();
+      row = data;
+    }
+    if (!row) return;
+    const mapped = mapMembers([row])[0];
+    if (mapped) setChatMember(mapped);
+  }
+
   const openProfile = (member) => {
     navigate(profilePathFromMember(member));
   };
@@ -126,6 +161,7 @@ function AppRoutes() {
                 onOpenDashboard={() => navigate("/dashboard")}
                 onOpenAdmin={() => navigate("/admin")}
                 onOpenProfile={openProfile}
+                onMessageNotificationOpen={openChatFromMessageNotification}
               />
               {sharedModals}
             </>
