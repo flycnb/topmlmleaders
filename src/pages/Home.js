@@ -124,7 +124,7 @@ function Home({
       return undefined;
     }
 
-    const MEMBERS_FETCH_TIMEOUT_MS = 8000;
+    const MEMBERS_FETCH_TIMEOUT_MS = 15000;
 
     let canceled = false;
     async function loadMembers() {
@@ -146,7 +146,7 @@ function Home({
         if (canceled) return;
 
         if (outcome.kind === "timeout") {
-          console.warn("[home] members load timed out after 8s — showing empty directory");
+          console.warn("[home] members load timed out after 15s — showing empty directory");
           setMembers([]);
           setLoadError(false);
           return;
