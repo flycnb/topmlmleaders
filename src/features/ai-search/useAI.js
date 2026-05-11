@@ -353,7 +353,7 @@ export function useAI(user) {
 
         const result = await postAiSearch(trimmed, accessToken);
         if (!result.ok || !result.data) {
-          setAssistantNote(result.message || "AI request failed. Try again.");
+          setAssistantNote("AI search unavailable. Please try normal search.");
           return;
         }
 
