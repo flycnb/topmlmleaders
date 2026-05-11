@@ -13,7 +13,7 @@ export function useBookmarks(user, onAuthRequired) {
         return;
       }
       setLoading(true);
-      const { data, error } = await supabase.from("bookmarks").select("*").eq("user_id", user.id);
+      const { data, error } = await supabase.from("bookmarks").select("*").eq("member_id", user.id);
       if (!active) return;
       if (error) {
         console.error("[bookmarks] load failed", error);
@@ -21,7 +21,7 @@ export function useBookmarks(user, onAuthRequired) {
         setLoading(false);
         return;
       }
-      const ids = (data || []).map((row) => row.member_id ?? row.following_id).filter(Boolean);
+      const ids = (data || []).map((row) => row.saved_member_id).filter(Boolean);
       setBookmarkedIds(new Set(ids));
       setLoading(false);
     }
@@ -58,8 +58,8 @@ export function useBookmarks(user, onAuthRequired) {
       const { error } = await supabase
         .from("bookmarks")
         .delete()
-        .eq("user_id", user.id)
-        .eq("member_id", memberId);
+        .eq("member_id", user.id)
+        .eq("saved_member_id", memberId);
       if (error) {
         setBookmarkedIds((prev) => new Set(prev).add(memberId));
       }
@@ -67,8 +67,8 @@ export function useBookmarks(user, onAuthRequired) {
     }
 
     const { error } = await supabase.from("bookmarks").insert({
-      user_id: user.id,
-      member_id: memberId,
+      member_id: user.id,
+      saved_member_id: memberId,
       created_at: new Date().toISOString(),
     });
     if (error) {
