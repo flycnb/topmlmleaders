@@ -222,9 +222,9 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const color = liveMember.color || "#6C63FF";
   const phoneAllowed = liveMember.phoneVisibility === "public" || (user && liveMember.phoneVisibility !== "private");
   const waAllowed = liveMember.waVisibility === "public" || (user && liveMember.waVisibility !== "private");
-  const emailVis =
-    liveMember.emailVisibility || liveMember.email_visibility || "private";
-  const emailAllowed = emailVis === "public" || (user && emailVis !== "private");
+  const emailVis = liveMember.emailVisibility || liveMember.email_visibility;
+  const emailAllowed =
+    emailVis === "public" || (Boolean(user?.id) && emailVis !== "private");
   const galleryPhotoUrls = normalizeGalleryUrls(liveMember.gallery_urls);
 
   async function onUploadPhoto(event) {
@@ -314,10 +314,12 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   }
 
   function openWa() {
-    if (!waAllowed || !liveMember.wa) {
+    if (!liveMember.wa) return;
+    if (!user?.id) {
       onAuthRequired();
       return;
     }
+    if (!waAllowed) return;
     window.open(`https://wa.me/${String(liveMember.wa).replace(/[^\d]/g, "")}`, "_blank", "noopener");
   }
 
@@ -434,9 +436,6 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     const waDigits = liveMember.wa ? String(liveMember.wa).replace(/[^\d]/g, "") : "";
     const emailRaw = String(liveMember.email || "").trim();
     const telHref = phoneRaw ? `tel:${phoneRaw.replace(/[^\d+]/g, "")}` : "";
-    const canCall = Boolean(phoneRaw && phoneAllowed);
-    const canWa = Boolean(waDigits && waAllowed);
-    const canMail = Boolean(emailRaw && emailAllowed);
     /* Match MemberCard.js Message / Bookmark / Chat action buttons */
     const contactActionBtn = { borderRadius: 10, fontWeight: 700, padding: "8px 6px", cursor: "pointer" };
     const contactCols = Number(Boolean(phoneRaw)) + Number(Boolean(waDigits)) + Number(Boolean(emailRaw));
@@ -456,10 +455,11 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
               <button
                 type="button"
                 onClick={() => {
-                  if (!canCall) {
+                  if (!user?.id) {
                     onAuthRequired();
                     return;
                   }
+                  if (!phoneRaw || !phoneAllowed) return;
                   window.location.href = telHref;
                 }}
                 style={{
@@ -476,10 +476,11 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
               <button
                 type="button"
                 onClick={() => {
-                  if (!canWa) {
+                  if (!user?.id) {
                     onAuthRequired();
                     return;
                   }
+                  if (!waDigits || !waAllowed) return;
                   window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");
                 }}
                 style={{
@@ -496,10 +497,11 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
               <button
                 type="button"
                 onClick={() => {
-                  if (!canMail) {
+                  if (!user?.id) {
                     onAuthRequired();
                     return;
                   }
+                  if (!emailRaw || !emailAllowed) return;
                   window.location.href = `mailto:${emailRaw}?subject=${encodeURIComponent(
                     `Re: ${liveMember.name || "TopMLMLeaders"} profile`
                   )}`;
