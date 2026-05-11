@@ -130,6 +130,9 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const [rated, setRated] = useState(false);
   const [lightbox, setLightbox] = useState("");
   const fileRef = useRef(null);
+  const [profileProducts, setProfileProducts] = useState([]);
+  const [profileEvents, setProfileEvents] = useState([]);
+  const [profileTeamRows, setProfileTeamRows] = useState([]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -162,6 +165,31 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
 
   useEffect(() => setBookingName(user?.name || ""), [user?.name]);
 
+  useEffect(() => {
+    const id = liveMember.id;
+    if (!id) {
+      setProfileProducts([]);
+      setProfileEvents([]);
+      setProfileTeamRows([]);
+      return undefined;
+    }
+    let canceled = false;
+    (async () => {
+      const [a, b, c] = await Promise.all([
+        supabase.from("products").select("id,name,description,price").eq("member_id", id).order("created_at", { ascending: true }),
+        supabase.from("events").select("id,title,date,time,location,description").eq("member_id", id).order("date", { ascending: true }),
+        supabase.from("profile_team").select("id,name,role,photo_url").eq("member_id", id).order("sort_order", { ascending: true }),
+      ]);
+      if (canceled) return;
+      setProfileProducts(a.error ? [] : a.data || []);
+      setProfileEvents(b.error ? [] : b.data || []);
+      setProfileTeamRows(c.error ? [] : c.data || []);
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [liveMember.id]);
+
   const canEdit = Boolean(user?.id && user.id === liveMember.ownerId);
   const color = liveMember.color || "#6C63FF";
   const phoneAllowed = liveMember.phoneVisibility === "public" || (user && liveMember.phoneVisibility !== "private");
@@ -170,9 +198,6 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     liveMember.emailVisibility || liveMember.email_visibility || "private";
   const emailAllowed = emailVis === "public" || (user && emailVis !== "private");
   const galleryPhotoUrls = normalizeGalleryUrls(liveMember.gallery_urls);
-  const services = Array.isArray(liveMember.services) ? liveMember.services : [];
-  const events = Array.isArray(liveMember.events) ? liveMember.events : [];
-  const team = Array.isArray(liveMember.team) ? liveMember.team : [];
 
   async function onUploadPhoto(event) {
     const input = event.target;
@@ -534,10 +559,57 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
         </div>
       );
     }
-    if (activeTab === "services") return services.length ? services.map((item, index) => card(item.name || `Service ${index + 1}`, <div><p style={{ color: "var(--color-muted)" }}>{item.description || "MLM growth support and mentorship."}</p><button type="button" onClick={openWa} style={{ border: "none", borderRadius: 999, background: color, color: "#FFFFFF", padding: "8px 12px", fontWeight: 700 }}>Enquire</button></div>)) : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No services listed yet</div>;
-    if (activeTab === "events") return events.length ? events.map((item, index) => card(item.title || `Event ${index + 1}`, <p style={{ margin: 0, color: "var(--color-muted)" }}>{item.date || "Date TBA"} · {item.time || "Time TBA"}</p>)) : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No upcoming events</div>;
+    if (activeTab === "services")
+      return profileProducts.length ? (
+        profileProducts.map((item, index) =>
+          card(item.name || `Service ${index + 1}`, (
+            <div>
+              {item.description ? <p style={{ color: "var(--color-muted)", marginTop: 0 }}>{item.description}</p> : null}
+              {item.price ? <p style={{ fontWeight: 700, margin: item.description ? "8px 0 0" : 0 }}>{item.price}</p> : null}
+              <button type="button" onClick={openWa} style={{ border: "none", borderRadius: 999, background: color, color: "#FFFFFF", padding: "8px 12px", fontWeight: 700, marginTop: 10 }}>Enquire</button>
+            </div>
+          ))
+        )
+      ) : (
+        <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No services listed yet</div>
+      );
+    if (activeTab === "events")
+      return profileEvents.length ? (
+        profileEvents.map((item, index) =>
+          card(item.title || `Event ${index + 1}`, (
+            <div>
+              <p style={{ margin: 0, color: "var(--color-muted)" }}>
+                {[item.date || "Date TBA", item.time].filter(Boolean).join(" · ")}
+              </p>
+              {item.location ? <p style={{ margin: "8px 0 0", color: "var(--color-text)" }}>📍 {item.location}</p> : null}
+              {item.description ? <p style={{ margin: "8px 0 0", color: "var(--color-muted)" }}>{item.description}</p> : null}
+            </div>
+          ))
+        )
+      ) : (
+        <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No upcoming events</div>
+      );
     if (activeTab === "join us") return card(`Join ${liveMember.name}'s Team`, <form onSubmit={onJoinSubmit} style={{ display: "grid", gap: 10 }}><input required value={joinForm.name} onChange={(event) => setJoinForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Full Name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><input required value={joinForm.wa} onChange={(event) => setJoinForm((prev) => ({ ...prev, wa: event.target.value }))} placeholder="WhatsApp Number" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><input required value={joinForm.city} onChange={(event) => setJoinForm((prev) => ({ ...prev, city: event.target.value }))} placeholder="Your City" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }} /><select value={joinForm.experience} onChange={(event) => setJoinForm((prev) => ({ ...prev, experience: event.target.value }))} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px", fontFamily: "Inter, sans-serif" }}><option>No experience</option><option>1-2 years</option><option>3-5 years</option><option>5+ years</option></select><button type="submit" style={{ border: "none", borderRadius: 12, background: color, color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>Submit</button>{joinStatus ? <p style={{ margin: 0, color: "var(--color-muted)" }}>{joinStatus}</p> : null}</form>);
-    if (activeTab === "team") return team.length ? <div style={{ display: "grid", gap: 10 }}>{team.map((item, index) => <div key={`${item.name}-${index}`} style={{ background: "#FFFFFF", borderRadius: 14, padding: 12, display: "flex", gap: 10 }}><div style={{ width: 40, height: 40, borderRadius: "50%", background: `${color}22`, display: "grid", placeItems: "center", color }}>{String(item.name || "TM").slice(0, 2).toUpperCase()}</div><div><div style={{ fontWeight: 700 }}>{item.name}</div><div style={{ fontSize: 12, color: "var(--color-muted)" }}>{item.city} · {item.role}</div></div></div>)}</div> : <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No team members listed</div>;
+    if (activeTab === "team")
+      return profileTeamRows.length ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          {profileTeamRows.map((item) => (
+            <div key={item.id} style={{ background: "#FFFFFF", borderRadius: 14, padding: 12, display: "flex", gap: 10 }}>
+              {item.photo_url ? (
+                <img src={item.photo_url} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${color}22`, display: "grid", placeItems: "center", color, fontWeight: 700, flexShrink: 0 }}>{String(item.name || "TM").slice(0, 2).toUpperCase()}</div>
+              )}
+              <div>
+                <div style={{ fontWeight: 700 }}>{item.name}</div>
+                {item.role ? <div style={{ fontSize: 12, color: "var(--color-muted)" }}>{item.role}</div> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", color: "var(--color-muted)", padding: 20 }}>No team members listed</div>
+      );
     return renderBook();
   }
 

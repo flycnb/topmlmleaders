@@ -48,6 +48,20 @@ function slugify(text) {
     .replace(/\s+/g, "-");
 }
 
+function planCapsForMemberPlan(plan) {
+  const p = String(plan || "free").toLowerCase();
+  const unlimited = p === "elite" || p === "company";
+  return {
+    productsMax: unlimited ? Number.MAX_SAFE_INTEGER : p === "pro" ? 10 : 3,
+    eventsMax: unlimited ? Number.MAX_SAFE_INTEGER : p === "pro" ? 5 : 1,
+    teamMax: unlimited ? Number.MAX_SAFE_INTEGER : p === "pro" ? 10 : 3,
+  };
+}
+
+function formatCapLabel(n) {
+  return n >= Number.MAX_SAFE_INTEGER / 2 ? "∞" : String(n);
+}
+
 /** Escape structured values for vCard 3.0 (comma, semicolon, backslash, newline). */
 function escapeVcardText(value) {
   return String(value || "")
@@ -187,6 +201,18 @@ function Dashboard({
   const [youtubeVideosStatus, setYoutubeVideosStatus] = useState("");
   const [savingYoutubeVideos, setSavingYoutubeVideos] = useState(false);
   const [mediaGalleryStatus, setMediaGalleryStatus] = useState("");
+  const [dashProducts, setDashProducts] = useState([]);
+  const [dashEvents, setDashEvents] = useState([]);
+  const [dashTeam, setDashTeam] = useState([]);
+  const [extrasStatusProducts, setExtrasStatusProducts] = useState("");
+  const [extrasStatusEvents, setExtrasStatusEvents] = useState("");
+  const [extrasStatusTeam, setExtrasStatusTeam] = useState("");
+  const [newProduct, setNewProduct] = useState({ name: "", description: "", price: "" });
+  const [newEvent, setNewEvent] = useState({ title: "", date: "", location: "", description: "" });
+  const [newTeam, setNewTeam] = useState({ name: "", role: "" });
+  const teamPhotoInputRef = useRef(null);
+  const [teamPhotoRowId, setTeamPhotoRowId] = useState(null);
+  const [teamPhotoUploading, setTeamPhotoUploading] = useState(false);
 
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
@@ -249,6 +275,30 @@ function Dashboard({
       String(raw[2] ?? "").trim(),
     ]);
   }, [myMember?.id, myMember?.youtube_urls]);
+
+  useEffect(() => {
+    if (!myMember?.id) {
+      setDashProducts([]);
+      setDashEvents([]);
+      setDashTeam([]);
+      return undefined;
+    }
+    let active = true;
+    (async () => {
+      const [pr, ev, tm] = await Promise.all([
+        supabase.from("products").select("*").eq("member_id", myMember.id).order("created_at", { ascending: true }),
+        supabase.from("events").select("*").eq("member_id", myMember.id).order("date", { ascending: true }),
+        supabase.from("profile_team").select("*").eq("member_id", myMember.id).order("sort_order", { ascending: true }),
+      ]);
+      if (!active) return;
+      setDashProducts(pr.data || []);
+      setDashEvents(ev.data || []);
+      setDashTeam(tm.data || []);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [myMember?.id]);
 
   useEffect(() => {
     if (authInitializing) return undefined;
@@ -701,6 +751,191 @@ function Dashboard({
     }
   }
 
+  async function addDashboardProduct() {
+    if (!user?.id || !myMember?.id) {
+      setExtrasStatusProducts("Save your profile first.");
+      return;
+    }
+    const caps = planCapsForMemberPlan(myMember.plan);
+    if (dashProducts.length >= caps.productsMax) {
+      setExtrasStatusProducts("You have reached your plan limit for services.");
+      return;
+    }
+    const name = newProduct.name.trim();
+    if (!name) {
+      setExtrasStatusProducts("Service name is required.");
+      return;
+    }
+    setExtrasStatusProducts("");
+    const { data, error } = await supabase
+      .from("products")
+      .insert({
+        member_id: myMember.id,
+        name,
+        description: newProduct.description.trim() || null,
+        price: newProduct.price.trim() || null,
+      })
+      .select("*");
+    if (error) {
+      setExtrasStatusProducts(error.message);
+      return;
+    }
+    setNewProduct({ name: "", description: "", price: "" });
+    setDashProducts((prev) => [...prev, ...(data || [])]);
+    setExtrasStatusProducts("✅ Service added.");
+    window.setTimeout(() => setExtrasStatusProducts((prev) => (prev === "✅ Service added." ? "" : prev)), 4000);
+  }
+
+  async function deleteDashboardProduct(id) {
+    if (!user?.id || !myMember?.id || !id) return;
+    const { error } = await supabase.from("products").delete().eq("id", id).eq("member_id", myMember.id);
+    if (error) {
+      setExtrasStatusProducts(error.message);
+      return;
+    }
+    setDashProducts((prev) => prev.filter((row) => row.id !== id));
+  }
+
+  async function addDashboardEvent() {
+    if (!user?.id || !myMember?.id) {
+      setExtrasStatusEvents("Save your profile first.");
+      return;
+    }
+    const caps = planCapsForMemberPlan(myMember.plan);
+    if (dashEvents.length >= caps.eventsMax) {
+      setExtrasStatusEvents("You have reached your plan limit for events.");
+      return;
+    }
+    const title = newEvent.title.trim();
+    const date = newEvent.date.trim();
+    if (!title || !date) {
+      setExtrasStatusEvents("Title and date are required.");
+      return;
+    }
+    setExtrasStatusEvents("");
+    const { data, error } = await supabase
+      .from("events")
+      .insert({
+        member_id: myMember.id,
+        title,
+        date,
+        location: newEvent.location.trim() || null,
+        description: newEvent.description.trim() || null,
+      })
+      .select("*");
+    if (error) {
+      setExtrasStatusEvents(error.message);
+      return;
+    }
+    setNewEvent({ title: "", date: "", location: "", description: "" });
+    setDashEvents((prev) => [...prev, ...(data || [])]);
+    setExtrasStatusEvents("✅ Event added.");
+    window.setTimeout(() => setExtrasStatusEvents((prev) => (prev === "✅ Event added." ? "" : prev)), 4000);
+  }
+
+  async function deleteDashboardEvent(id) {
+    if (!user?.id || !myMember?.id || !id) return;
+    const { error } = await supabase.from("events").delete().eq("id", id).eq("member_id", myMember.id);
+    if (error) {
+      setExtrasStatusEvents(error.message);
+      return;
+    }
+    setDashEvents((prev) => prev.filter((row) => row.id !== id));
+  }
+
+  async function addDashboardTeamMember() {
+    if (!user?.id || !myMember?.id) {
+      setExtrasStatusTeam("Save your profile first.");
+      return;
+    }
+    const caps = planCapsForMemberPlan(myMember.plan);
+    if (dashTeam.length >= caps.teamMax) {
+      setExtrasStatusTeam("You have reached your plan limit for team members.");
+      return;
+    }
+    const name = newTeam.name.trim();
+    if (!name) {
+      setExtrasStatusTeam("Name is required.");
+      return;
+    }
+    setExtrasStatusTeam("");
+    const { data, error } = await supabase
+      .from("profile_team")
+      .insert({
+        member_id: myMember.id,
+        name,
+        role: newTeam.role.trim() || "",
+        sort_order: dashTeam.length,
+      })
+      .select("*");
+    if (error) {
+      setExtrasStatusTeam(error.message);
+      return;
+    }
+    setNewTeam({ name: "", role: "" });
+    setDashTeam((prev) => [...prev, ...(data || [])]);
+    setExtrasStatusTeam("✅ Team member added.");
+    window.setTimeout(() => setExtrasStatusTeam((prev) => (prev === "✅ Team member added." ? "" : prev)), 4000);
+  }
+
+  async function deleteDashboardTeamMember(id) {
+    if (!user?.id || !myMember?.id || !id) return;
+    const { error } = await supabase.from("profile_team").delete().eq("id", id).eq("member_id", myMember.id);
+    if (error) {
+      setExtrasStatusTeam(error.message);
+      return;
+    }
+    setDashTeam((prev) => prev.filter((row) => row.id !== id));
+  }
+
+  async function onTeamPhotoFileChange(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (input) input.value = "";
+    const rowId = teamPhotoRowId;
+    setTeamPhotoRowId(null);
+    if (!file || !rowId || !myMember?.id || !user?.id) return;
+    setTeamPhotoUploading(true);
+    setExtrasStatusTeam("");
+    try {
+      const rawExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
+      const path = `${myMember.id}/team-${rowId}-${Date.now()}.${ext}`;
+      const contentType = file.type || `image/${ext === "jpg" ? "jpeg" : ext}`;
+      const { error: uploadError } = await withTimeout(
+        supabase.storage.from("gallery").upload(path, file, { upsert: true, cacheControl: "3600", contentType }),
+        120000,
+        "Team photo upload"
+      );
+      if (uploadError) {
+        setExtrasStatusTeam(uploadError.message);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("gallery").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      const { data: updated, error } = await supabase
+        .from("profile_team")
+        .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq("id", rowId)
+        .eq("member_id", myMember.id)
+        .select("id, photo_url")
+        .maybeSingle();
+      if (error) {
+        setExtrasStatusTeam(error.message);
+        return;
+      }
+      if (updated) {
+        setDashTeam((prev) => prev.map((row) => (row.id === rowId ? { ...row, photo_url: updated.photo_url } : row)));
+        setExtrasStatusTeam("✅ Photo updated.");
+        window.setTimeout(() => setExtrasStatusTeam((prev) => (prev === "✅ Photo updated." ? "" : prev)), 4000);
+      }
+    } catch (e) {
+      setExtrasStatusTeam(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setTeamPhotoUploading(false);
+    }
+  }
+
   function downloadQr() {
     const canvas = document.getElementById(qrId);
     if (!canvas) return;
@@ -1038,6 +1273,135 @@ function Dashboard({
             {saveStatus ? <span style={{ color: "var(--color-muted)", fontSize: 13 }}>{saveStatus}</span> : null}
           </div>
         </section>
+
+        <input
+          ref={teamPhotoInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onTeamPhotoFileChange}
+        />
+
+        {(() => {
+          const caps = planCapsForMemberPlan(myMember?.plan);
+          const pLabel = `${dashProducts.length} / ${formatCapLabel(caps.productsMax)}`;
+          const eLabel = `${dashEvents.length} / ${formatCapLabel(caps.eventsMax)}`;
+          const tLabel = `${dashTeam.length} / ${formatCapLabel(caps.teamMax)}`;
+          return (
+            <>
+              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+                <h3 style={{ margin: "0 0 6px" }}>Products &amp; Services</h3>
+                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+                  Shown on your public profile · Free: max 3 · Pro: max 10 · Elite: unlimited ({pLabel} used)
+                </p>
+                {extrasStatusProducts ? (
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusProducts.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusProducts}</p>
+                ) : null}
+                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                  {dashProducts.map((row) => (
+                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                      <div style={{ fontWeight: 700 }}>{row.name}</div>
+                      {row.description ? <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>{row.description}</div> : null}
+                      {row.price ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.price}</div> : null}
+                      <button type="button" onClick={() => deleteDashboardProduct(row.id)} style={{ marginTop: 8, border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <input value={newProduct.name} onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))} placeholder="Service name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <textarea value={newProduct.description} onChange={(e) => setNewProduct((p) => ({ ...p, description: e.target.value }))} placeholder="Description" rows={3} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <input value={newProduct.price} onChange={(e) => setNewProduct((p) => ({ ...p, price: e.target.value }))} placeholder="Price (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <button type="button" onClick={addDashboardProduct} disabled={!myMember?.id || dashProducts.length >= caps.productsMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashProducts.length >= caps.productsMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
+                    Add service
+                  </button>
+                </div>
+              </section>
+
+              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+                <h3 style={{ margin: "0 0 6px" }}>Events</h3>
+                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+                  Free: max 1 · Pro: max 5 · Elite: unlimited ({eLabel} used)
+                </p>
+                {extrasStatusEvents ? (
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusEvents.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusEvents}</p>
+                ) : null}
+                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                  {dashEvents.map((row) => (
+                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                      <div style={{ fontWeight: 700 }}>{row.title}</div>
+                      <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>
+                        {[row.date, row.location].filter(Boolean).join(" · ") || "Date TBA"}
+                      </div>
+                      {row.description ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.description}</div> : null}
+                      <button type="button" onClick={() => deleteDashboardEvent(row.id)} style={{ marginTop: 8, border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <input value={newEvent.title} onChange={(e) => setNewEvent((p) => ({ ...p, title: e.target.value }))} placeholder="Title" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <input value={newEvent.date} onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))} placeholder="Date (e.g. Jun 14, 2026 or ISO)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <input value={newEvent.location} onChange={(e) => setNewEvent((p) => ({ ...p, location: e.target.value }))} placeholder="Location (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <textarea value={newEvent.description} onChange={(e) => setNewEvent((p) => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" rows={3} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <button type="button" onClick={addDashboardEvent} disabled={!myMember?.id || dashEvents.length >= caps.eventsMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashEvents.length >= caps.eventsMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
+                    Add event
+                  </button>
+                </div>
+              </section>
+
+              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+                <h3 style={{ margin: "0 0 6px" }}>Team</h3>
+                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+                  Free: max 3 · Pro: max 10 · Elite: unlimited ({tLabel} used) · Photos use the Gallery storage bucket ({myMember?.id}/team-… )
+                </p>
+                {extrasStatusTeam ? (
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusTeam.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusTeam}</p>
+                ) : null}
+                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                  {dashTeam.map((row) => (
+                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      {row.photo_url ? (
+                        <img src={row.photo_url} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEF2FF", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>{String(row.name || "").slice(0, 2).toUpperCase()}</div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700 }}>{row.name}</div>
+                        {row.role ? <div style={{ fontSize: 13, color: "var(--color-muted)" }}>{row.role}</div> : null}
+                        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          <button
+                            type="button"
+                            disabled={teamPhotoUploading}
+                            onClick={() => {
+                              setTeamPhotoRowId(row.id);
+                              teamPhotoInputRef.current?.click();
+                            }}
+                            style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                          >
+                            {teamPhotoUploading ? "Uploading…" : "Photo"}
+                          </button>
+                          <button type="button" onClick={() => deleteDashboardTeamMember(row.id)} style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <input value={newTeam.name} onChange={(e) => setNewTeam((p) => ({ ...p, name: e.target.value }))} placeholder="Name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <input value={newTeam.role} onChange={(e) => setNewTeam((p) => ({ ...p, role: e.target.value }))} placeholder="Role (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
+                  <button type="button" onClick={addDashboardTeamMember} disabled={!myMember?.id || dashTeam.length >= caps.teamMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashTeam.length >= caps.teamMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
+                    Add team member
+                  </button>
+                </div>
+              </section>
+            </>
+          );
+        })()}
       </div>
     );
   }
