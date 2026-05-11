@@ -15,17 +15,6 @@ const AI_FETCH_DEADLINE_MS = 65000;
 /** Prevent hanging forever on stalled JSON streams (Safari has seen rare stalls). */
 const RESPONSE_JSON_DEADLINE_MS = 45000;
 
-/** Avoid surfacing leaked API fields (e.g. model id) as user-visible “assistant” text. */
-function looksLikeProviderModelId(s) {
-  const t = String(s || "").trim();
-  if (!t || t.includes("{") || t.includes("[")) return false;
-  return (
-    /^claude-[a-z0-9.-]+$/i.test(t) ||
-    /^gpt-[a-z0-9.-]+$/i.test(t) ||
-    /^gemini-[a-z0-9.-]+$/i.test(t)
-  );
-}
-
 /** Strip ```json ... ``` fences Claude sometimes adds despite instructions. */
 function stripMarkdownJsonFence(raw) {
   let s = String(raw || "").trim();
@@ -82,35 +71,21 @@ function filterShapeOnly(obj) {
   return out;
 }
 
-/**
- * Claude Messages API: `content` is an array of blocks; assistant JSON lives in `text` on `type: "text"`
- * blocks. Proxies may omit `type` — still read `.text` (BUG-006).
- */
-function extractAnthropicMessageTextFromContent(content) {
+function extractAnthropicStyleTextBlocks(content) {
   if (!Array.isArray(content)) return "";
-  const parts = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    if (typeof block.text !== "string" || !block.text.trim()) continue;
-    const typ = block.type;
-    if (typ != null && typ !== "text") continue;
-    parts.push(block.text);
-  }
-  return parts.join("");
+  return content
+    .filter((b) => b && typeof b === "object" && !Array.isArray(b) && b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("");
 }
 
 /**
- * Edge returns `{ ok, text }`; upstream may also forward raw Anthropic `{ model, content: [{ text }] }`.
- * Always prefer assistant message text from `content` over top-level `text` (which may wrongly echo `model`).
+ * Edge returns `{ ok, text }`; if anything upstream leaked an Anthropic-shaped JSON into the body,
+ * recover assistant text from `content[]` instead of treating `model` as a filter field.
  */
 function extractAssistantTextFromEdgePayload(data) {
   if (!data || typeof data !== "object") return "";
-  const fromContent = extractAnthropicMessageTextFromContent(data.content).trim();
-  if (fromContent) return fromContent;
-  if (typeof data.text === "string" && data.text.trim()) {
-    const t = data.text.trim();
-    if (!looksLikeProviderModelId(t)) return t;
-  }
+  if (typeof data.text === "string" && data.text.trim()) return data.text.trim();
   if (data.filters && typeof data.filters === "object") {
     try {
       return JSON.stringify(data.filters);
@@ -118,6 +93,8 @@ function extractAssistantTextFromEdgePayload(data) {
       return "";
     }
   }
+  const fromContent = extractAnthropicStyleTextBlocks(data.content);
+  if (fromContent.trim()) return fromContent.trim();
   return "";
 }
 
@@ -135,25 +112,15 @@ function normalizeEdgeSuccessEnvelope(parsed) {
     return { success: false, message: String(p.error) };
   }
 
-  /** Raw / wrapped Anthropic-style body: parse JSON filters from `content[0].text` first (BUG-006). */
-  const fromAnthropic = extractAnthropicMessageTextFromContent(
-    Array.isArray(p.content) ? p.content : null
-  ).trim();
-  if (fromAnthropic) {
-    return { success: true, data: { ok: true, text: fromAnthropic } };
-  }
-
   if (p.ok === true && typeof p.text === "string") {
-    const t = String(p.text).trim();
-    if (t && !looksLikeProviderModelId(t)) {
-      return { success: true, data: p };
-    }
+    return { success: true, data: p };
   }
 
-  if (typeof p.text === "string") {
-    const t = String(p.text).trim();
-    if (t && !looksLikeProviderModelId(t)) {
-      return { success: true, data: { ok: true, text: t } };
+  const content = p.content;
+  if (Array.isArray(content)) {
+    const extracted = extractAnthropicStyleTextBlocks(content).trim();
+    if (extracted) {
+      return { success: true, data: { ok: true, text: extracted } };
     }
   }
 
@@ -245,35 +212,26 @@ async function postAiSearch(query, accessToken) {
 
     const contentType = (response.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
 
-    /**
-     * BUG-006 debug: body stream is single-use — read text once, log full payload, then JSON.parse.
-     * Remove or gate behind env after root cause is fixed (may include sensitive echoes).
-     */
-    const rawBody = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
-    console.log("[BUG-006 ai-search] raw HTTP response (before JSON parse)", {
-      url,
-      status: response.status,
-      ok: response.ok,
-      contentType,
-      headers: Object.fromEntries(response.headers.entries()),
-      rawBody,
-    });
-
     /** @type {unknown} */
     let parsed;
-    try {
-      parsed = rawBody.trim() ? JSON.parse(rawBody) : null;
-    } catch {
-      /**
-       * Was surfacing raw body (e.g. `model: claude-sonnet-…`) as assistantNote because
-       * `{ ok: false, error: text.slice(...) }` tripped the success-path error handler.
-       */
-      return {
-        ok: false,
-        message:
-          "AI service returned non-JSON. Confirm the ai-search Edge Function is deployed and returns JSON.",
-        data: null,
-      };
+    if (contentType.includes("application/json")) {
+      parsed = await withDeadline(response.json(), RESPONSE_JSON_DEADLINE_MS, "json-timeout");
+    } else {
+      const textBody = await withDeadline(response.text(), RESPONSE_JSON_DEADLINE_MS, "text-timeout");
+      try {
+        parsed = JSON.parse(textBody);
+      } catch {
+        /**
+         * Was surfacing raw body (e.g. `model: claude-sonnet-…`) as assistantNote because
+         * `{ ok: false, error: text.slice(...) }` tripped the success-path error handler.
+         */
+        return {
+          ok: false,
+          message:
+            "AI service returned non-JSON. Confirm the ai-search Edge Function is deployed and returns JSON.",
+          data: null,
+        };
+      }
     }
 
     if (!response.ok) {
@@ -401,7 +359,7 @@ export function useAI(user) {
 
         const data = result.data;
         const assistantRaw = extractAssistantTextFromEdgePayload(data);
-        if (!assistantRaw || looksLikeProviderModelId(assistantRaw)) {
+        if (!assistantRaw) {
           setFilters(null);
           setBannerQuery("");
           setAssistantNote("AI returned no filter text. Try again or rephrase.");
