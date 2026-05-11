@@ -49,7 +49,7 @@ function ChatBubble({ message, isOwn }) {
 function ChatModal({ open, onClose, user, member }) {
   const [text, setText] = useState("");
   const listRef = useRef(null);
-  const { messages, sendMessage, loading, peerMissing } = useChat(user, member);
+  const { messages, sendMessage, loading, peerMissing, senderMissing, myMemberId } = useChat(user, member);
 
   const onlineText = useMemo(() => "● Online", []);
 
@@ -62,7 +62,7 @@ function ChatModal({ open, onClose, user, member }) {
 
   async function onSend() {
     const value = text.trim();
-    if (!value || peerMissing) return;
+    if (!value || peerMissing || senderMissing || !myMemberId) return;
     setText("");
     await sendMessage(value);
   }
@@ -161,6 +161,21 @@ function ChatModal({ open, onClose, user, member }) {
             when they join.
           </div>
         ) : null}
+        {senderMissing ? (
+          <div
+            style={{
+              margin: 12,
+              background: "#FEF3C7",
+              color: "#92400E",
+              border: "1px solid #FDE68A",
+              borderRadius: 12,
+              padding: 10,
+              fontSize: 13,
+            }}
+          >
+            Claim or complete your leader profile in the dashboard before sending messages.
+          </div>
+        ) : null}
 
         <section
           ref={listRef}
@@ -188,7 +203,7 @@ function ChatModal({ open, onClose, user, member }) {
               <ChatBubble
                 key={message.id}
                 message={message}
-                isOwn={message.sender_id === user?.id}
+                isOwn={Boolean(myMemberId) && message.sender_id === myMemberId}
               />
             ))
           )}
@@ -207,8 +222,10 @@ function ChatModal({ open, onClose, user, member }) {
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={onEnter}
-            disabled={peerMissing}
-            placeholder={peerMissing ? "Chat unavailable" : "Type a message"}
+            disabled={peerMissing || senderMissing}
+            placeholder={
+              peerMissing || senderMissing ? "Chat unavailable" : "Type a message"
+            }
             style={{
               flex: 1,
               borderRadius: 999,
@@ -221,7 +238,7 @@ function ChatModal({ open, onClose, user, member }) {
           <button
             type="button"
             onClick={onSend}
-            disabled={peerMissing || !text.trim()}
+            disabled={peerMissing || senderMissing || !text.trim()}
             style={{
               border: "none",
               borderRadius: 999,
@@ -230,7 +247,7 @@ function ChatModal({ open, onClose, user, member }) {
               color: "#FFFFFF",
               fontWeight: 700,
               cursor: "pointer",
-              opacity: peerMissing || !text.trim() ? 0.5 : 1,
+              opacity: peerMissing || senderMissing || !text.trim() ? 0.5 : 1,
             }}
           >
             Send

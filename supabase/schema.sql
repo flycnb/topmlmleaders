@@ -664,7 +664,10 @@ on public.messages
 for insert
 to authenticated
 with check (
-  sender_id = auth.uid()
+  exists (
+    select 1 from public.members m
+    where m.id = sender_id and m.owner_id = auth.uid()
+  )
   and public.is_conversation_participant(conversation_id)
 );
 
@@ -958,14 +961,25 @@ declare
   v_other uuid;
   v_slug text;
   v_from text;
+  v_sender_owner uuid;
 begin
+  select m.owner_id
+  into v_sender_owner
+  from public.members m
+  where m.id = new.sender_id
+  limit 1;
+
+  if v_sender_owner is null then
+    return new;
+  end if;
+
   select
-    case when c.member1_id = new.sender_id then c.member2_id else c.member1_id end
+    case when c.member1_id = v_sender_owner then c.member2_id else c.member1_id end
   into v_other
   from public.conversations c
   where c.id = new.conversation_id;
 
-  if v_other is null or v_other = new.sender_id then
+  if v_other is null or v_other = v_sender_owner then
     return new;
   end if;
 
@@ -975,7 +989,7 @@ begin
 
   select m.slug into v_slug
   from public.members m
-  where m.owner_id = new.sender_id
+  where m.id = new.sender_id
   limit 1;
 
   v_from := coalesce(new.sender_name, 'Someone');

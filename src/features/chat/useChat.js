@@ -9,7 +9,35 @@ export function useChat(user, member) {
   const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [myMemberId, setMyMemberId] = useState(null);
+  const [myMemberResolved, setMyMemberResolved] = useState(false);
   const peerMissing = !member?.ownerId;
+  /** Logged in but no members row for this auth user — cannot satisfy messages.sender_id → members FK. */
+  const senderMissing = Boolean(user?.id) && myMemberResolved && !myMemberId;
+
+  useEffect(() => {
+    if (!user?.id) {
+      setMyMemberId(null);
+      setMyMemberResolved(true);
+      return undefined;
+    }
+    let active = true;
+    setMyMemberResolved(false);
+    void supabase
+      .from("members")
+      .select("id")
+      .eq("owner_id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.error("[chat] resolve sender member id failed", error);
+        setMyMemberId(data?.id ?? null);
+        setMyMemberResolved(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -108,14 +136,14 @@ export function useChat(user, member) {
   }, [user?.id, member?.ownerId]);
 
   const markAsRead = useCallback(async () => {
-    if (!conversationId || !user?.id) return;
+    if (!conversationId || !myMemberId) return;
     await supabase
       .from("messages")
       .update({ read: true })
       .eq("conversation_id", conversationId)
-      .neq("sender_id", user.id)
+      .neq("sender_id", myMemberId)
       .eq("read", false);
-  }, [conversationId, user?.id]);
+  }, [conversationId, myMemberId]);
 
   useEffect(() => {
     if (!conversationId) return undefined;
@@ -152,11 +180,11 @@ export function useChat(user, member) {
   const sendMessage = useCallback(
     async (text) => {
       const body = String(text || "").trim();
-      if (!body || !conversationId || !user?.id || peerMissing) return;
+      if (!body || !conversationId || !user?.id || peerMissing || !myMemberId) return;
 
       const { error: insertError } = await supabase.from("messages").insert({
         conversation_id: conversationId,
-        sender_id: user.id,
+        sender_id: myMemberId,
         sender_name: user.name || null,
         message: body,
       });
@@ -178,7 +206,7 @@ export function useChat(user, member) {
         console.error("[chat] conversations update failed", convError);
       }
     },
-    [conversationId, user?.id, user?.name, peerMissing]
+    [conversationId, user?.id, user?.name, peerMissing, myMemberId]
   );
 
   return useMemo(
@@ -187,9 +215,11 @@ export function useChat(user, member) {
       sendMessage,
       loading,
       peerMissing,
+      senderMissing,
+      myMemberId,
       markAsRead,
     }),
-    [messages, sendMessage, loading, peerMissing, markAsRead]
+    [messages, sendMessage, loading, peerMissing, senderMissing, myMemberId, markAsRead]
   );
 }
 
