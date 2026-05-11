@@ -341,6 +341,7 @@ alter table public.products add column if not exists name text;
 alter table public.products add column if not exists description text;
 alter table public.products add column if not exists price text;
 alter table public.products add column if not exists category text;
+alter table public.products add column if not exists pdf_url text;
 alter table public.products add column if not exists created_at timestamptz default now();
 
 update public.products set
@@ -458,7 +459,7 @@ create policy "products_select_public"
 drop policy if exists "products_insert_owner" on public.products;
 create policy "products_insert_owner"
   on public.products for insert to authenticated with check (
-    exists (select 1 from public.members m where m.id = products.member_id and m.owner_id = auth.uid())
+    exists (select 1 from public.members m where m.id = member_id and m.owner_id = auth.uid())
   );
 
 drop policy if exists "products_update_owner" on public.products;
@@ -480,7 +481,7 @@ create policy "events_select_public"
 drop policy if exists "events_insert_owner" on public.events;
 create policy "events_insert_owner"
   on public.events for insert to authenticated with check (
-    exists (select 1 from public.members m where m.id = events.member_id and m.owner_id = auth.uid())
+    exists (select 1 from public.members m where m.id = member_id and m.owner_id = auth.uid())
   );
 
 drop policy if exists "events_update_owner" on public.events;
@@ -502,7 +503,7 @@ create policy "profile_team_select_public"
 drop policy if exists "profile_team_insert_owner" on public.profile_team;
 create policy "profile_team_insert_owner"
   on public.profile_team for insert to authenticated with check (
-    exists (select 1 from public.members m where m.id = profile_team.member_id and m.owner_id = auth.uid())
+    exists (select 1 from public.members m where m.id = member_id and m.owner_id = auth.uid())
   );
 
 drop policy if exists "profile_team_update_owner" on public.profile_team;
@@ -826,6 +827,41 @@ create policy "members_delete_owner"
   for delete
   to authenticated
   using (owner_id = auth.uid());
+
+drop policy if exists "members_claim_unowned_email_match" on public.members;
+create policy "members_claim_unowned_email_match"
+  on public.members for update to authenticated
+  using (
+    owner_id is null
+    and email is not null
+    and lower(trim(email)) = lower(trim(coalesce(auth.jwt()->>'email', '')))
+  )
+  with check (owner_id = auth.uid());
+
+-- Profile reports (matches src/features/flags/FlagModal.js)
+create table if not exists public.flags (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references auth.users(id) on delete cascade,
+  member_id uuid not null references public.members(id) on delete cascade,
+  reason text,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_flags_member_id on public.flags(member_id);
+create index if not exists idx_flags_reporter_id on public.flags(reporter_id);
+
+alter table public.flags enable row level security;
+
+drop policy if exists "flags_insert_authenticated" on public.flags;
+create policy "flags_insert_authenticated"
+  on public.flags for insert to authenticated
+  with check (reporter_id = auth.uid());
+
+drop policy if exists "flags_select_own" on public.flags;
+create policy "flags_select_own"
+  on public.flags for select to authenticated
+  using (reporter_id = auth.uid());
 
 alter table public.bookings enable row level security;
 

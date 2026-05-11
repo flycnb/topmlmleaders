@@ -108,6 +108,7 @@ function AppRoutes() {
               <Dashboard
                 user={user}
                 authInitializing={loading}
+                signingOut={signingOut}
                 onBack={() => navigate("/")}
                 onOpenChat={openChat}
                 onOpenProfile={openProfile}

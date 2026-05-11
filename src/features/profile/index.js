@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import ShareSheet from "../../components/ShareSheet";
 import QRCodeModal from "../../components/QRCode";
+import FlagModal from "../flags/FlagModal";
 
 const TABS = ["about", "gallery", "services", "events", "join us", "team", "book"];
 
@@ -129,6 +130,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const [star, setStar] = useState(0);
   const [rated, setRated] = useState(false);
   const [lightbox, setLightbox] = useState("");
+  const [showFlag, setShowFlag] = useState(false);
   const fileRef = useRef(null);
   const [profileProducts, setProfileProducts] = useState([]);
   const [profileEvents, setProfileEvents] = useState([]);
@@ -176,7 +178,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     let canceled = false;
     (async () => {
       const [a, b, c] = await Promise.all([
-        supabase.from("products").select("id,name,description,price").eq("member_id", id).order("created_at", { ascending: true }),
+        supabase.from("products").select("id,name,description,price,pdf_url").eq("member_id", id).order("created_at", { ascending: true }),
         supabase.from("events").select("id,title,date,time,location,description").eq("member_id", id).order("date", { ascending: true }),
         supabase.from("profile_team").select("id,name,role,photo_url").eq("member_id", id).order("sort_order", { ascending: true }),
       ]);
@@ -566,6 +568,13 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
             <div>
               {item.description ? <p style={{ color: "var(--color-muted)", marginTop: 0 }}>{item.description}</p> : null}
               {item.price ? <p style={{ fontWeight: 700, margin: item.description ? "8px 0 0" : 0 }}>{item.price}</p> : null}
+              {item.pdf_url ? (
+                <p style={{ margin: "8px 0 0" }}>
+                  <a href={item.pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700, color: color }}>
+                    View PDF
+                  </a>
+                </p>
+              ) : null}
               <button type="button" onClick={openWa} style={{ border: "none", borderRadius: 999, background: color, color: "#FFFFFF", padding: "8px 12px", fontWeight: 700, marginTop: 10 }}>Enquire</button>
             </div>
           ))
@@ -713,12 +722,57 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
         </div>
       </section>
       <main style={{ padding: "12px 16px 110px" }}>{renderContent()}</main>
-      <footer style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30, borderTop: "1px solid var(--color-border)", background: "#FFFFFF", display: "flex", gap: 8, padding: "10px 12px calc(10px + var(--safe-bottom))" }}>
-        <button type="button" onClick={() => onOpenChat(liveMember)} style={{ flex: 1, borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-muted)", fontWeight: 700, padding: "12px 10px" }}>💬 Message</button>
-        <button type="button" onClick={() => setActiveTab(liveMember.plan === "elite" ? "book" : "join us")} style={{ flex: 2, borderRadius: 999, border: "none", background: color, color: "#FFFFFF", fontWeight: 800, padding: "12px 10px" }}>
-          {liveMember.plan === "elite" ? "📅 Book Appointment" : "🎯 Join My Team"}
+      <footer
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 30,
+          borderTop: "1px solid var(--color-border)",
+          background: "#FFFFFF",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 8,
+          padding: "10px 12px calc(10px + var(--safe-bottom))",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onOpenChat(liveMember)}
+          style={{ borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-muted)", fontWeight: 700, padding: "12px 8px", fontSize: 13 }}
+        >
+          💬 Message
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!user?.id) {
+              onAuthRequired?.();
+              return;
+            }
+            setShowFlag(true);
+          }}
+          style={{ borderRadius: 999, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "#B45309", fontWeight: 700, padding: "12px 8px", fontSize: 13 }}
+        >
+          🚩 Flag
+        </button>
+        <button
+          type="button"
+          title={liveMember.plan === "elite" ? "Book appointment" : "Join my team"}
+          onClick={() => setActiveTab(liveMember.plan === "elite" ? "book" : "join us")}
+          style={{ borderRadius: 999, border: "none", background: color, color: "#FFFFFF", fontWeight: 800, padding: "12px 8px", fontSize: 13 }}
+        >
+          {liveMember.plan === "elite" ? "📅 Book" : "🎯 Join team"}
         </button>
       </footer>
+      <FlagModal
+        open={showFlag}
+        onClose={() => setShowFlag(false)}
+        user={user}
+        member={liveMember}
+        onAuthRequired={onAuthRequired}
+      />
       {showShare ? <ShareSheet open={showShare} onClose={() => setShowShare(false)} member={{ ...liveMember, teamSize: liveMember.teamSize || "-" }} /> : null}
       {showQr ? <QRCodeModal open={showQr} onClose={() => setShowQr(false)} member={liveMember} /> : null}
       {lightbox ? (

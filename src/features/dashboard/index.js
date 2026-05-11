@@ -15,6 +15,9 @@ import { useNotifications } from "../notifications/useNotifications";
 const TABS = [
   "overview",
   "profile",
+  "services",
+  "events",
+  "team",
   "media",
   "messages",
   "bookmarks",
@@ -60,6 +63,13 @@ function planCapsForMemberPlan(plan) {
 
 function formatCapLabel(n) {
   return n >= Number.MAX_SAFE_INTEGER / 2 ? "∞" : String(n);
+}
+
+function planPdfCapForPlan(plan) {
+  const p = String(plan || "free").toLowerCase();
+  if (p === "elite" || p === "company") return Number.MAX_SAFE_INTEGER;
+  if (p === "pro") return 3;
+  return 1;
 }
 
 /** Escape structured values for vCard 3.0 (comma, semicolon, backslash, newline). */
@@ -151,6 +161,7 @@ function extractYoutubeVideoId(raw) {
 function Dashboard({
   user,
   authInitializing = false,
+  signingOut = false,
   onBack,
   onOpenChat,
   onOpenProfile,
@@ -213,6 +224,10 @@ function Dashboard({
   const teamPhotoInputRef = useRef(null);
   const [teamPhotoRowId, setTeamPhotoRowId] = useState(null);
   const [teamPhotoUploading, setTeamPhotoUploading] = useState(false);
+  const productPdfInputRef = useRef(null);
+  const [productPdfRowId, setProductPdfRowId] = useState(null);
+  const [productPdfUploading, setProductPdfUploading] = useState(false);
+  const claimOwnerAttemptedRef = useRef(false);
 
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
@@ -450,6 +465,42 @@ function Dashboard({
       setLoading(false);
     };
   }, [authInitializing, user?.id, user?.name]);
+
+  useEffect(() => {
+    if (!user?.id || !myMember?.id || loading) return;
+    if (myMember.owner_id === user.id) {
+      claimOwnerAttemptedRef.current = false;
+      return;
+    }
+    if (myMember.owner_id != null) return;
+    if (claimOwnerAttemptedRef.current) return;
+    claimOwnerAttemptedRef.current = true;
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .update({
+          owner_id: user.id,
+          email: user.email || myMember.email,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", myMember.id)
+        .is("owner_id", null)
+        .select("*")
+        .maybeSingle();
+      if (!active) return;
+      if (error) {
+        console.warn("[dashboard] claim member owner failed", error.message);
+        claimOwnerAttemptedRef.current = false;
+        return;
+      }
+      if (data) setMyMember(data);
+      claimOwnerAttemptedRef.current = false;
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.email, myMember?.id, myMember?.owner_id, myMember?.email, loading]);
 
   function getMemberPayload() {
     const initials =
@@ -756,6 +807,7 @@ function Dashboard({
       setExtrasStatusProducts("Save your profile first.");
       return;
     }
+    await supabase.auth.getSession();
     const caps = planCapsForMemberPlan(myMember.plan);
     if (dashProducts.length >= caps.productsMax) {
       setExtrasStatusProducts("You have reached your plan limit for services.");
@@ -796,11 +848,90 @@ function Dashboard({
     setDashProducts((prev) => prev.filter((row) => row.id !== id));
   }
 
+  async function clearProductPdf(productId) {
+    if (!user?.id || !myMember?.id || !productId) return;
+    const { error } = await supabase
+      .from("products")
+      .update({ pdf_url: null, updated_at: new Date().toISOString() })
+      .eq("id", productId)
+      .eq("member_id", myMember.id);
+    if (error) {
+      setExtrasStatusProducts(error.message);
+      return;
+    }
+    setDashProducts((prev) => prev.map((row) => (row.id === productId ? { ...row, pdf_url: null } : row)));
+  }
+
+  async function onProductPdfFileChange(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (input) input.value = "";
+    const pid = productPdfRowId;
+    setProductPdfRowId(null);
+    if (!file || !pid || !myMember?.id || !user?.id) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setExtrasStatusProducts("Please upload a PDF file.");
+      return;
+    }
+    const pdfCap = planPdfCapForPlan(myMember.plan);
+    const rowsWithPdf = dashProducts.filter((r) => r.pdf_url);
+    const row = dashProducts.find((r) => r.id === pid);
+    const replacing = Boolean(row?.pdf_url);
+    if (!replacing && rowsWithPdf.length >= pdfCap) {
+      setExtrasStatusProducts("PDF limit reached for your plan (Free: 1, Pro: 3, Elite: unlimited).");
+      return;
+    }
+    setProductPdfUploading(true);
+    setExtrasStatusProducts("");
+    try {
+      const path = `${myMember.id}/product-${pid}-${Date.now()}.pdf`;
+      const { error: upErr } = await withTimeout(
+        supabase.storage.from("gallery").upload(path, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: "application/pdf",
+        }),
+        120000,
+        "PDF upload"
+      );
+      if (upErr) {
+        setExtrasStatusProducts(upErr.message);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("gallery").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      const { data: updated, error } = await supabase
+        .from("products")
+        .update({ pdf_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq("id", pid)
+        .eq("member_id", myMember.id)
+        .select("id, pdf_url")
+        .maybeSingle();
+      if (error) {
+        setExtrasStatusProducts(error.message);
+        return;
+      }
+      if (updated) {
+        setDashProducts((prev) =>
+          prev.map((r) => (r.id === pid ? { ...r, pdf_url: updated.pdf_url } : r))
+        );
+        setExtrasStatusProducts("✅ PDF saved.");
+        window.setTimeout(() => setExtrasStatusProducts((p) => (p === "✅ PDF saved." ? "" : p)), 4000);
+      }
+    } catch (e) {
+      setExtrasStatusProducts(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setProductPdfUploading(false);
+    }
+  }
+
   async function addDashboardEvent() {
     if (!user?.id || !myMember?.id) {
       setExtrasStatusEvents("Save your profile first.");
       return;
     }
+    await supabase.auth.getSession();
     const caps = planCapsForMemberPlan(myMember.plan);
     if (dashEvents.length >= caps.eventsMax) {
       setExtrasStatusEvents("You have reached your plan limit for events.");
@@ -848,6 +979,7 @@ function Dashboard({
       setExtrasStatusTeam("Save your profile first.");
       return;
     }
+    await supabase.auth.getSession();
     const caps = planCapsForMemberPlan(myMember.plan);
     if (dashTeam.length >= caps.teamMax) {
       setExtrasStatusTeam("You have reached your plan limit for team members.");
@@ -1215,6 +1347,315 @@ function Dashboard({
     );
   }
 
+  function renderServicesTab() {
+    const caps = planCapsForMemberPlan(myMember?.plan);
+    const pLabel = `${dashProducts.length} / ${formatCapLabel(caps.productsMax)}`;
+    const pdfCap = planPdfCapForPlan(myMember?.plan);
+    const pdfCount = dashProducts.filter((r) => r.pdf_url).length;
+    const pdfLabel = `${pdfCount} / ${formatCapLabel(pdfCap)}`;
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        <input
+          ref={productPdfInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          style={{ display: "none" }}
+          onChange={onProductPdfFileChange}
+        />
+        <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>Products &amp; Services</h3>
+          <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+            Public profile Services tab · Services: Free max 3 · Pro max 10 · Elite unlimited ({pLabel}) · PDFs: Free 1 · Pro 3 · Elite unlimited ({pdfLabel}) · Stored in{' '}
+            <strong>gallery</strong> bucket
+          </p>
+          {extrasStatusProducts ? (
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusProducts.startsWith("✅") ? "#059669" : "#DC2626" }}>
+              {extrasStatusProducts}
+            </p>
+          ) : null}
+          <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+            {dashProducts.map((row) => (
+              <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                <div style={{ fontWeight: 700 }}>{row.name}</div>
+                {row.description ? (
+                  <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>{row.description}</div>
+                ) : null}
+                {row.price ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.price}</div> : null}
+                {row.pdf_url ? (
+                  <div style={{ marginTop: 8 }}>
+                    <a href={row.pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600 }}>
+                      View PDF
+                    </a>
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button
+                    type="button"
+                    disabled={productPdfUploading || !myMember?.id}
+                    onClick={() => {
+                      setProductPdfRowId(row.id);
+                      productPdfInputRef.current?.click();
+                    }}
+                    style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                  >
+                    {productPdfUploading ? "Uploading…" : row.pdf_url ? "Replace PDF" : "Add PDF"}
+                  </button>
+                  {row.pdf_url ? (
+                    <button
+                      type="button"
+                      onClick={() => clearProductPdf(row.id)}
+                      style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                    >
+                      Remove PDF
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => deleteDashboardProduct(row.id)}
+                    style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                  >
+                    Remove service
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              value={newProduct.name}
+              onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))}
+              placeholder="Service name"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <textarea
+              value={newProduct.description}
+              onChange={(e) => setNewProduct((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Description"
+              rows={3}
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <input
+              value={newProduct.price}
+              onChange={(e) => setNewProduct((p) => ({ ...p, price: e.target.value }))}
+              placeholder="Price (optional)"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <button
+              type="button"
+              onClick={addDashboardProduct}
+              disabled={!myMember?.id || dashProducts.length >= caps.productsMax}
+              style={{
+                border: "none",
+                borderRadius: 10,
+                background: !myMember?.id || dashProducts.length >= caps.productsMax ? "#D1D5DB" : "var(--color-primary)",
+                color: "#FFFFFF",
+                padding: "10px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Add service
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderEventsTab() {
+    const caps = planCapsForMemberPlan(myMember?.plan);
+    const eLabel = `${dashEvents.length} / ${formatCapLabel(caps.eventsMax)}`;
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>Events</h3>
+          <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+            Public profile Events tab · Free: max 1 · Pro: max 5 · Elite: unlimited ({eLabel} used)
+          </p>
+          {extrasStatusEvents ? (
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusEvents.startsWith("✅") ? "#059669" : "#DC2626" }}>
+              {extrasStatusEvents}
+            </p>
+          ) : null}
+          <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+            {dashEvents.map((row) => (
+              <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
+                <div style={{ fontWeight: 700 }}>{row.title}</div>
+                <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>
+                  {[row.date, row.location].filter(Boolean).join(" · ") || "Date TBA"}
+                </div>
+                {row.description ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.description}</div> : null}
+                <button
+                  type="button"
+                  onClick={() => deleteDashboardEvent(row.id)}
+                  style={{
+                    marginTop: 8,
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
+                    background: "#FFFFFF",
+                    padding: "6px 10px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              value={newEvent.title}
+              onChange={(e) => setNewEvent((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Title"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <input
+              value={newEvent.date}
+              onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))}
+              placeholder="Date (e.g. Jun 14, 2026 or ISO)"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <input
+              value={newEvent.location}
+              onChange={(e) => setNewEvent((p) => ({ ...p, location: e.target.value }))}
+              placeholder="Location (optional)"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <textarea
+              value={newEvent.description}
+              onChange={(e) => setNewEvent((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Description (optional)"
+              rows={3}
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <button
+              type="button"
+              onClick={addDashboardEvent}
+              disabled={!myMember?.id || dashEvents.length >= caps.eventsMax}
+              style={{
+                border: "none",
+                borderRadius: 10,
+                background: !myMember?.id || dashEvents.length >= caps.eventsMax ? "#D1D5DB" : "var(--color-primary)",
+                color: "#FFFFFF",
+                padding: "10px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Add event
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderTeamTab() {
+    const caps = planCapsForMemberPlan(myMember?.plan);
+    const tLabel = `${dashTeam.length} / ${formatCapLabel(caps.teamMax)}`;
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        <input
+          ref={teamPhotoInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onTeamPhotoFileChange}
+        />
+        <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>Team</h3>
+          <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
+            Public profile Team tab · Free: max 3 · Pro: max 10 · Elite: unlimited ({tLabel} used) · Photos: <strong>gallery</strong> bucket · path{' '}
+            <code style={{ fontSize: 11 }}>{myMember?.id}/team-…</code>
+          </p>
+          {extrasStatusTeam ? (
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusTeam.startsWith("✅") ? "#059669" : "#DC2626" }}>
+              {extrasStatusTeam}
+            </p>
+          ) : null}
+          <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+            {dashTeam.map((row) => (
+              <div
+                key={row.id}
+                style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, display: "flex", gap: 10, alignItems: "flex-start" }}
+              >
+                {row.photo_url ? (
+                  <img src={row.photo_url} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background: "#EEF2FF",
+                      display: "grid",
+                      placeItems: "center",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {String(row.name || "").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700 }}>{row.name}</div>
+                  {row.role ? <div style={{ fontSize: 13, color: "var(--color-muted)" }}>{row.role}</div> : null}
+                  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={teamPhotoUploading}
+                      onClick={() => {
+                        setTeamPhotoRowId(row.id);
+                        teamPhotoInputRef.current?.click();
+                      }}
+                      style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                    >
+                      {teamPhotoUploading ? "Uploading…" : "Gallery photo"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteDashboardTeamMember(row.id)}
+                      style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input
+              value={newTeam.name}
+              onChange={(e) => setNewTeam((p) => ({ ...p, name: e.target.value }))}
+              placeholder="Name"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <input
+              value={newTeam.role}
+              onChange={(e) => setNewTeam((p) => ({ ...p, role: e.target.value }))}
+              placeholder="Role (optional)"
+              style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+            />
+            <button
+              type="button"
+              onClick={addDashboardTeamMember}
+              disabled={!myMember?.id || dashTeam.length >= caps.teamMax}
+              style={{
+                border: "none",
+                borderRadius: 10,
+                background: !myMember?.id || dashTeam.length >= caps.teamMax ? "#D1D5DB" : "var(--color-primary)",
+                color: "#FFFFFF",
+                padding: "10px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Add team member
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   function renderProfile() {
     return (
       <div style={{ display: "grid", gap: 12 }}>
@@ -1273,135 +1714,11 @@ function Dashboard({
             {saveStatus ? <span style={{ color: "var(--color-muted)", fontSize: 13 }}>{saveStatus}</span> : null}
           </div>
         </section>
-
-        <input
-          ref={teamPhotoInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={onTeamPhotoFileChange}
-        />
-
-        {(() => {
-          const caps = planCapsForMemberPlan(myMember?.plan);
-          const pLabel = `${dashProducts.length} / ${formatCapLabel(caps.productsMax)}`;
-          const eLabel = `${dashEvents.length} / ${formatCapLabel(caps.eventsMax)}`;
-          const tLabel = `${dashTeam.length} / ${formatCapLabel(caps.teamMax)}`;
-          return (
-            <>
-              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
-                <h3 style={{ margin: "0 0 6px" }}>Products &amp; Services</h3>
-                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
-                  Shown on your public profile · Free: max 3 · Pro: max 10 · Elite: unlimited ({pLabel} used)
-                </p>
-                {extrasStatusProducts ? (
-                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusProducts.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusProducts}</p>
-                ) : null}
-                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-                  {dashProducts.map((row) => (
-                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontWeight: 700 }}>{row.name}</div>
-                      {row.description ? <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>{row.description}</div> : null}
-                      {row.price ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.price}</div> : null}
-                      <button type="button" onClick={() => deleteDashboardProduct(row.id)} style={{ marginTop: 8, border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  <input value={newProduct.name} onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))} placeholder="Service name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <textarea value={newProduct.description} onChange={(e) => setNewProduct((p) => ({ ...p, description: e.target.value }))} placeholder="Description" rows={3} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <input value={newProduct.price} onChange={(e) => setNewProduct((p) => ({ ...p, price: e.target.value }))} placeholder="Price (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <button type="button" onClick={addDashboardProduct} disabled={!myMember?.id || dashProducts.length >= caps.productsMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashProducts.length >= caps.productsMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
-                    Add service
-                  </button>
-                </div>
-              </section>
-
-              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
-                <h3 style={{ margin: "0 0 6px" }}>Events</h3>
-                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
-                  Free: max 1 · Pro: max 5 · Elite: unlimited ({eLabel} used)
-                </p>
-                {extrasStatusEvents ? (
-                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusEvents.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusEvents}</p>
-                ) : null}
-                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-                  {dashEvents.map((row) => (
-                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontWeight: 700 }}>{row.title}</div>
-                      <div style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>
-                        {[row.date, row.location].filter(Boolean).join(" · ") || "Date TBA"}
-                      </div>
-                      {row.description ? <div style={{ fontSize: 13, marginTop: 4 }}>{row.description}</div> : null}
-                      <button type="button" onClick={() => deleteDashboardEvent(row.id)} style={{ marginTop: 8, border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  <input value={newEvent.title} onChange={(e) => setNewEvent((p) => ({ ...p, title: e.target.value }))} placeholder="Title" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <input value={newEvent.date} onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))} placeholder="Date (e.g. Jun 14, 2026 or ISO)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <input value={newEvent.location} onChange={(e) => setNewEvent((p) => ({ ...p, location: e.target.value }))} placeholder="Location (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <textarea value={newEvent.description} onChange={(e) => setNewEvent((p) => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" rows={3} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <button type="button" onClick={addDashboardEvent} disabled={!myMember?.id || dashEvents.length >= caps.eventsMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashEvents.length >= caps.eventsMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
-                    Add event
-                  </button>
-                </div>
-              </section>
-
-              <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
-                <h3 style={{ margin: "0 0 6px" }}>Team</h3>
-                <p style={{ margin: "0 0 10px", color: "var(--color-muted)", fontSize: 13 }}>
-                  Free: max 3 · Pro: max 10 · Elite: unlimited ({tLabel} used) · Photos use the Gallery storage bucket ({myMember?.id}/team-… )
-                </p>
-                {extrasStatusTeam ? (
-                  <p style={{ margin: "0 0 8px", fontSize: 13, color: extrasStatusTeam.startsWith("✅") ? "#059669" : "#DC2626" }}>{extrasStatusTeam}</p>
-                ) : null}
-                <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-                  {dashTeam.map((row) => (
-                    <div key={row.id} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      {row.photo_url ? (
-                        <img src={row.photo_url} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEF2FF", display: "grid", placeItems: "center", fontWeight: 700, flexShrink: 0 }}>{String(row.name || "").slice(0, 2).toUpperCase()}</div>
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700 }}>{row.name}</div>
-                        {row.role ? <div style={{ fontSize: 13, color: "var(--color-muted)" }}>{row.role}</div> : null}
-                        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          <button
-                            type="button"
-                            disabled={teamPhotoUploading}
-                            onClick={() => {
-                              setTeamPhotoRowId(row.id);
-                              teamPhotoInputRef.current?.click();
-                            }}
-                            style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}
-                          >
-                            {teamPhotoUploading ? "Uploading…" : "Photo"}
-                          </button>
-                          <button type="button" onClick={() => deleteDashboardTeamMember(row.id)} style={{ border: "1px solid var(--color-border)", borderRadius: 8, background: "#FFFFFF", padding: "6px 10px", fontWeight: 600 }}>
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  <input value={newTeam.name} onChange={(e) => setNewTeam((p) => ({ ...p, name: e.target.value }))} placeholder="Name" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <input value={newTeam.role} onChange={(e) => setNewTeam((p) => ({ ...p, role: e.target.value }))} placeholder="Role (optional)" style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }} />
-                  <button type="button" onClick={addDashboardTeamMember} disabled={!myMember?.id || dashTeam.length >= caps.teamMax} style={{ border: "none", borderRadius: 10, background: !myMember?.id || dashTeam.length >= caps.teamMax ? "#D1D5DB" : "var(--color-primary)", color: "#FFFFFF", padding: "10px 14px", fontWeight: 700 }}>
-                    Add team member
-                  </button>
-                </div>
-              </section>
-            </>
-          );
-        })()}
+        <section style={{ background: "#F8FAFC", borderRadius: 12, padding: 12, border: "1px solid var(--color-border)" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)" }}>
+            Edit <strong>Services</strong>, <strong>Events</strong>, and <strong>Team</strong> in their own tabs above.
+          </p>
+        </section>
       </div>
     );
   }
@@ -1874,12 +2191,33 @@ function Dashboard({
     if (loading) return <p style={{ color: "var(--color-muted)" }}>Loading dashboard...</p>;
     if (activeTab === "overview") return renderOverview();
     if (activeTab === "profile") return renderProfile();
+    if (activeTab === "services") return renderServicesTab();
+    if (activeTab === "events") return renderEventsTab();
+    if (activeTab === "team") return renderTeamTab();
     if (activeTab === "media") return renderMedia();
     if (activeTab === "messages") return renderMessages();
     if (activeTab === "bookmarks") return renderBookmarks();
     if (activeTab === "bookings") return renderBookings();
     if (activeTab === "settings") return renderSettings();
     return renderRefer();
+  }
+
+  if (!user?.id) {
+    if (authInitializing || loading) {
+      return (
+        <div className="fade-in" style={{ minHeight: "100vh", background: "#FFFFFF", display: "grid", placeItems: "center", padding: 24 }}>
+          <p style={{ color: "var(--color-muted)" }}>Loading dashboard…</p>
+        </div>
+      );
+    }
+    return (
+      <div className="fade-in" style={{ minHeight: "100vh", background: "#FFFFFF", padding: 24, textAlign: "center" }}>
+        <p style={{ color: "var(--color-muted)" }}>Please sign in to open your dashboard.</p>
+        <button type="button" onClick={onBack} style={{ marginTop: 16, border: "none", borderRadius: 999, background: "var(--color-primary)", color: "#FFFFFF", padding: "10px 20px", fontWeight: 700 }}>
+          ← Back home
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -1913,6 +2251,23 @@ function Dashboard({
             <span style={{ fontSize: 12, color: "var(--color-muted)", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {user.name}
             </span>
+            <button
+              type="button"
+              disabled={signingOut}
+              onClick={() => onSignOut?.()}
+              style={{
+                border: "1px solid var(--color-border)",
+                borderRadius: 10,
+                background: "#FFFFFF",
+                padding: "8px 12px",
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: signingOut ? "default" : "pointer",
+                opacity: signingOut ? 0.65 : 1,
+              }}
+            >
+              {signingOut ? "…" : "Logout"}
+            </button>
           </div>
         </div>
       </header>
