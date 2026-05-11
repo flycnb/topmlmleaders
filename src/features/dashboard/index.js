@@ -233,6 +233,10 @@ function Dashboard({
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
 
+  useEffect(() => {
+    setStats((prev) => ({ ...prev, bookmarks: bookmarks.length }));
+  }, [bookmarks]);
+
   const profileUrl = useMemo(() => {
     const slug = myMember?.slug || slugify(profileForm.name || user?.name);
     return `https://topmlmleaders.com/${slug}`;
@@ -334,39 +338,44 @@ function Dashboard({
       }, 5000);
 
       try {
-        const myMemberPromise = supabase
+        const myMemberRes = await supabase
           .from("members")
           .select("*")
           .eq("owner_id", user.id)
           .limit(1)
           .maybeSingle();
+
+        if (!active) return;
+
+        const memberRow = myMemberRes.data || null;
+        setMyMember(memberRow);
+
         const conversationsPromise = supabase
           .from("conversations")
           .select("*")
           .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
           .order("last_message_time", { ascending: false });
-        const bookmarksPromise = supabase
-          .from("bookmarks")
-          .select("*")
-          .eq("member_id", user.id)
-          .order("created_at", { ascending: false });
+        const bookmarksPromise =
+          memberRow?.id != null
+            ? supabase
+                .from("bookmarks")
+                .select("*")
+                .eq("member_id", memberRow.id)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] });
         const outgoingPromise = supabase
           .from("bookings")
           .select("*")
           .eq("booker_id", user.id)
           .order("created_at", { ascending: false });
 
-        const [myMemberRes, convRes, bookmarksRes, outgoingRes] = await Promise.all([
-          myMemberPromise,
+        const [convRes, bookmarksRes, outgoingRes] = await Promise.all([
           conversationsPromise,
           bookmarksPromise,
           outgoingPromise,
         ]);
 
         if (!active) return;
-
-        const memberRow = myMemberRes.data || null;
-        setMyMember(memberRow);
 
         const convRows = convRes.data || [];
         const bookmarkRows = bookmarksRes.data || [];
@@ -427,7 +436,7 @@ function Dashboard({
         setStats({
           followers: Number(memberRow?.follower_count || 0),
           messages: convRows.length,
-          bookmarks: bookmarkRows.length,
+          bookmarks: bookmarkWithMembers.length,
         });
 
         setIncomingBookings(incomingRes.data || []);
@@ -1105,7 +1114,6 @@ function Dashboard({
   async function removeBookmark(bookmarkId) {
     await supabase.from("bookmarks").delete().eq("id", bookmarkId);
     setBookmarks((prev) => prev.filter((item) => item.id !== bookmarkId));
-    setStats((prev) => ({ ...prev, bookmarks: Math.max(0, prev.bookmarks - 1) }));
   }
 
   async function submitVerification() {
