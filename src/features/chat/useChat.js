@@ -182,16 +182,27 @@ export function useChat(user, member) {
       const body = String(text || "").trim();
       if (!body || !conversationId || !user?.id || peerMissing || !myMemberId) return;
 
-      const { error: insertError } = await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        sender_id: myMemberId,
-        sender_name: user.name || null,
-        message: body,
-      });
+      const { data: insertedRow, error: insertError } = await supabase
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          sender_id: myMemberId,
+          sender_name: user.name || null,
+          message: body,
+        })
+        .select("*")
+        .single();
 
       if (insertError) {
         console.error("[chat] messages insert failed", insertError);
         return;
+      }
+
+      if (insertedRow) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === insertedRow.id)) return prev;
+          return [...prev, insertedRow];
+        });
       }
 
       const { error: convError } = await supabase

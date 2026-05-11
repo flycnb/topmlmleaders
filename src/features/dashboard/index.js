@@ -1150,9 +1150,22 @@ function Dashboard({
   const conversationRows = useMemo(() => {
     return conversations.map((item) => {
       const otherOwnerId = item.member1_id === user?.id ? item.member2_id : item.member1_id;
-      const otherMember = Object.values(membersById).find(
-        (memberRow) => memberRow.owner_id === otherOwnerId
-      );
+      const otherMember =
+        Object.values(membersById).find((memberRow) => memberRow.owner_id === otherOwnerId) ||
+        (otherOwnerId
+          ? {
+              id: "",
+              name: "Member",
+              city: "",
+              country: "",
+              company: "",
+              role: "",
+              initials: "M",
+              avatarUrl: "",
+              slug: "",
+              ownerId: otherOwnerId,
+            }
+          : null);
       return {
         ...item,
         otherMember: otherMember || null,
