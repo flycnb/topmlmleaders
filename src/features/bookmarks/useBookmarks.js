@@ -72,8 +72,15 @@ export function useBookmarks(user, onAuthRequired) {
       created_at: new Date().toISOString(),
     });
     if (error) {
-      // Unique-constraint conflicts mean the bookmark already exists; keep optimistic state.
-      if (error.code === "23505" || error.code === "409") return;
+      // Duplicate bookmark: treat as success (keep optimistic UI; no rollback / no surfaced error).
+      const msg = String(error.message || error.details || "");
+      const status = Number(error.status ?? error.statusCode);
+      const isConflict =
+        error.code === "23505" ||
+        error.code === "409" ||
+        status === 409 ||
+        /duplicate|unique constraint|already exists|conflict/i.test(msg);
+      if (isConflict) return;
       setBookmarkedIds((prev) => {
         const next = new Set(prev);
         next.delete(memberId);
