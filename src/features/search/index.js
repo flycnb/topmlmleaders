@@ -46,7 +46,7 @@ export function mapMembers(rawMembers) {
     role: member.role || "",
     yearsExp: member.years_exp || 0,
     rating: Number(member.rating || 0),
-    reviews: Number(member.likes || 0),
+    reviews: Number(member.rating_count ?? member.likes ?? 0),
     phone: member.phone || "",
     phoneVisibility: member.phone_visibility || "private",
     wa: member.wa || "",

@@ -101,6 +101,8 @@ function normalizeMember(member) {
     earnings,
     joinedDate,
     badges: badgeLabelsFromBadges(member.badges),
+    rating: Number(member.rating ?? 0),
+    reviews: Number(member.reviews ?? member.rating_count ?? member.likes ?? 0),
   };
 }
 
@@ -129,6 +131,8 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const [bookingStatus, setBookingStatus] = useState("");
   const [star, setStar] = useState(0);
   const [rated, setRated] = useState(false);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState("");
   const [lightbox, setLightbox] = useState("");
   const [showFlag, setShowFlag] = useState(false);
   const fileRef = useRef(null);
@@ -145,6 +149,9 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     setLiveMember(normalized);
     setFollowers(Number(normalized.followerCount || 0));
     setYoutubeInput(normalized.youtubeUrl || "");
+    setStar(0);
+    setRated(false);
+    setRatingError("");
   }, [member]);
 
   useEffect(() => {
@@ -166,6 +173,25 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   }, [member?.id]);
 
   useEffect(() => setBookingName(user?.name || ""), [user?.name]);
+
+  useEffect(() => {
+    if (!user?.id || !liveMember?.id || user.id === liveMember.ownerId) return undefined;
+    let canceled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("member_ratings")
+        .select("stars")
+        .eq("member_id", liveMember.id)
+        .eq("rater_id", user.id)
+        .maybeSingle();
+      if (canceled || data?.stars == null) return;
+      setStar(Number(data.stars));
+      setRated(true);
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [liveMember.id, liveMember.ownerId, user?.id]);
 
   useEffect(() => {
     const id = liveMember.id;
@@ -300,6 +326,45 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       setFollowers(followerCount);
       setLiveMember((prev) => (prev ? { ...prev, followerCount } : prev));
     });
+  }
+
+  async function submitLeaderRating() {
+    if (!user?.id || !liveMember?.id) {
+      onAuthRequired?.();
+      return;
+    }
+    if (user.id === liveMember.ownerId) {
+      setRatingError("You cannot rate your own profile.");
+      return;
+    }
+    if (star < 1 || star > 5) {
+      setRatingError("Choose 1–5 stars, then submit.");
+      return;
+    }
+    setRatingSubmitting(true);
+    setRatingError("");
+    try {
+      const { error } = await supabase.from("member_ratings").upsert(
+        {
+          member_id: liveMember.id,
+          rater_id: user.id,
+          stars: star,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "member_id,rater_id" }
+      );
+      if (error) {
+        setRatingError(String(error.message || "Could not save rating."));
+        return;
+      }
+      const { data: refreshed, error: refErr } = await supabase.from("members").select("*").eq("id", liveMember.id).maybeSingle();
+      if (!refErr && refreshed) {
+        setLiveMember((prev) => normalizeMember({ ...prev, ...refreshed }) || prev);
+      }
+      setRated(true);
+    } finally {
+      setRatingSubmitting(false);
+    }
   }
 
   function renderAbout() {
@@ -480,8 +545,55 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       liveMember.socialLi ? { label: "LinkedIn", color: "#0A66C2" } : null,
     ].filter(Boolean);
     if (socials.length) rows.push(card("Social Media", <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{socials.map((item) => <button key={item.label} type="button" style={{ borderRadius: 12, border: "none", background: item.color, color: "#FFFFFF", padding: 10, fontWeight: 700 }}>{item.label}</button>)}</div>));
-    if (user) {
-      rows.push(card("Rate This Leader", <div><div style={{ marginBottom: 10 }}>{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" onClick={() => setStar(value)} style={{ border: "none", background: "transparent", fontSize: 24, color: value <= star ? "#F59E0B" : "#D1D5DB", cursor: "pointer" }}>★</button>)}</div><button type="button" onClick={() => setRated(true)} style={{ border: "none", borderRadius: 12, background: color, color: "#FFFFFF", padding: "10px 14px", fontWeight: 700, cursor: "pointer" }}>Submit</button>{rated ? <p style={{ color: "#10B981" }}>Thank you!</p> : null}</div>));
+    if (user && user.id !== liveMember.ownerId) {
+      rows.push(
+        card(
+          "Rate This Leader",
+          <div>
+            <div style={{ marginBottom: 10 }}>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setStar(value);
+                    setRated(false);
+                    setRatingError("");
+                  }}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    fontSize: 24,
+                    color: value <= star ? "#F59E0B" : "#D1D5DB",
+                    cursor: "pointer",
+                  }}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={ratingSubmitting || star < 1}
+              onClick={() => void submitLeaderRating()}
+              style={{
+                border: "none",
+                borderRadius: 12,
+                background: color,
+                color: "#FFFFFF",
+                padding: "10px 14px",
+                fontWeight: 700,
+                cursor: ratingSubmitting || star < 1 ? "not-allowed" : "pointer",
+                opacity: ratingSubmitting || star < 1 ? 0.65 : 1,
+              }}
+            >
+              {ratingSubmitting ? "Saving…" : "Submit"}
+            </button>
+            {rated && !ratingError ? <p style={{ color: "#10B981", marginTop: 8 }}>Thank you!</p> : null}
+            {ratingError ? <p style={{ color: "#DC2626", marginTop: 8 }}>{ratingError}</p> : null}
+          </div>
+        )
+      );
     } else {
       rows.push(card("Rate This Leader", <button type="button" onClick={onAuthRequired} style={{ border: "none", borderRadius: 12, background: color, color: "#FFFFFF", padding: "10px 14px", fontWeight: 700, cursor: "pointer" }}>Login to Rate</button>));
     }
