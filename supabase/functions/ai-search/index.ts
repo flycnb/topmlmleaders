@@ -21,14 +21,15 @@ function corsHeaders(): Record<string, string> {
 function extractText(data: Record<string, unknown>): string {
   const content = data?.content;
   if (!Array.isArray(content)) return "{}";
-  const parts = content
-    .filter(
-      (block): block is { type: string; text?: string } =>
-        Boolean(block && typeof block === "object" && block !== null && (block as { type?: string }).type === "text")
-    )
-    .map((block) => (typeof block.text === "string" ? block.text : ""))
-    .join("");
-  return parts || "{}";
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object" || block === null) continue;
+    const b = block as { type?: string; text?: string };
+    if (typeof b.text !== "string" || !b.text.trim()) continue;
+    if (b.type != null && b.type !== "text") continue;
+    parts.push(b.text);
+  }
+  return parts.join("") || "{}";
 }
 
 /** Claude occasionally echoes request metadata instead of JSON — never ship that as filter text. */
