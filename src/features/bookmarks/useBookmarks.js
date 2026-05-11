@@ -13,12 +13,16 @@ export function useBookmarks(user, onAuthRequired) {
         return;
       }
       setLoading(true);
-      const { data } = await supabase
-        .from("bookmarks")
-        .select("member_id")
-        .eq("user_id", user.id);
+      const { data, error } = await supabase.from("bookmarks").select("*").eq("user_id", user.id);
       if (!active) return;
-      setBookmarkedIds(new Set((data || []).map((row) => row.member_id)));
+      if (error) {
+        console.error("[bookmarks] load failed", error);
+        setBookmarkedIds(new Set());
+        setLoading(false);
+        return;
+      }
+      const ids = (data || []).map((row) => row.member_id ?? row.following_id).filter(Boolean);
+      setBookmarkedIds(new Set(ids));
       setLoading(false);
     }
     loadBookmarks();
