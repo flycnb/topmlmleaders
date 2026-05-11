@@ -116,6 +116,16 @@ export function useBookmarks(user, onAuthRequired) {
       created_at: new Date().toISOString(),
     });
     if (error) {
+      console.log(
+        "[bookmark] error object:",
+        JSON.stringify(error),
+        "status:",
+        error?.status,
+        "code:",
+        error?.code,
+        "message:",
+        error?.message
+      );
       // Duplicate bookmark: treat as success (keep optimistic UI; no rollback / no surfaced error).
       if (isBookmarkDuplicateInsertError(error)) return;
       setBookmarkedIds((prev) => {
