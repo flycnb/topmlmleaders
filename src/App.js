@@ -94,34 +94,63 @@ function AppRoutes() {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(segment || ""));
   }
 
-  async function openChatFromMessageNotification(item) {
-    if (!item || item.type !== "message") return;
-    const raw = String(item.link || "").trim();
-    let segment = raw
+  /** URL/hash segment from notification `link` (e.g. '#/m/jane-doe' → 'jane-doe'). */
+  function segmentFromNotificationLink(raw) {
+    let segment = String(raw || "")
+      .trim()
       .replace(/^#\/m\//i, "")
       .replace(/^#\/u\//i, "")
       .replace(/^\/u\//i, "")
       .replace(/^\//, "")
       .split("?")[0]
-      .split("#")[0];
-    if (!segment) return;
+      .split("#")[0]
+      .trim();
+    if (!segment) return "";
     try {
-      segment = decodeURIComponent(segment);
+      return decodeURIComponent(segment);
     } catch {
-      /* ignore */
+      return segment;
     }
-    let row = null;
+  }
+
+  async function fetchMemberRowBySlugOrId(segment) {
+    if (!segment) return null;
     if (isUuidSegment(segment)) {
       const { data } = await supabase.from("members").select("*").eq("id", segment).maybeSingle();
-      row = data;
+      if (data) return data;
     }
-    if (!row) {
-      const { data } = await supabase.from("members").select("*").eq("slug", segment).maybeSingle();
-      row = data;
+    const { data } = await supabase.from("members").select("*").eq("slug", segment).maybeSingle();
+    return data || null;
+  }
+
+  /**
+   * Opens ChatModal with the peer who sent the message.
+   * Prefer `link` (e.g. '#/m/{slug}'); fall back to `from_name` when it is a member id or slug-like string.
+   */
+  async function openChatFromMessageNotification(item) {
+    if (!item || item.type !== "message") return;
+
+    let row = await fetchMemberRowBySlugOrId(segmentFromNotificationLink(item.link));
+
+    if (!row && item.from_name) {
+      const hint = String(item.from_name).trim();
+      if (hint) {
+        if (isUuidSegment(hint)) {
+          const { data } = await supabase.from("members").select("*").eq("id", hint).maybeSingle();
+          row = data || null;
+        } else {
+          const asSlug = hint.toLowerCase();
+          if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(asSlug)) {
+            const { data } = await supabase.from("members").select("*").eq("slug", asSlug).maybeSingle();
+            row = data || null;
+          }
+        }
+      }
     }
+
     if (!row) return;
     const mapped = mapMembers([row])[0];
-    if (mapped) setChatMember(mapped);
+    if (mapped) openChat(mapped);
   }
 
   const openProfile = (member) => {
