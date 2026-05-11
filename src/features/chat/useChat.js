@@ -158,7 +158,7 @@ export function useChat(user, member) {
         conversation_id: conversationId,
         sender_id: user.id,
         sender_name: user.name || null,
-        text: body,
+        message: body,
       });
 
       if (insertError) {

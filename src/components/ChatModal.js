@@ -24,7 +24,9 @@ function ChatBubble({ message, isOwn }) {
           color: isOwn ? "#FFFFFF" : "var(--color-text)",
         }}
       >
-        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.text}</div>
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {message.message ?? message.text}
+        </div>
         <div
           style={{
             marginTop: 6,
