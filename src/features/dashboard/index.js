@@ -347,7 +347,7 @@ function Dashboard({
         const bookmarksPromise = supabase
           .from("bookmarks")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("member_id", user.id)
           .order("created_at", { ascending: false });
         const outgoingPromise = supabase
           .from("bookings")
@@ -374,7 +374,7 @@ function Dashboard({
         setConversations(convRows);
         setOutgoingBookings(outgoingRows);
 
-        const memberIdsFromBookmarks = bookmarkRows.map((row) => row.member_id).filter(Boolean);
+        const memberIdsFromBookmarks = bookmarkRows.map((row) => row.saved_member_id).filter(Boolean);
         const otherConversationOwnerIds = convRows
           .map((row) => (row.member1_id === user.id ? row.member2_id : row.member1_id))
           .filter(Boolean);
@@ -419,7 +419,7 @@ function Dashboard({
         setMembersById(byId);
 
         const bookmarkWithMembers = bookmarkRows
-          .map((row) => ({ ...row, member: byId[row.member_id] }))
+          .map((row) => ({ ...row, member: byId[row.saved_member_id] }))
           .filter((row) => Boolean(row.member));
         setBookmarks(bookmarkWithMembers);
 
