@@ -68,15 +68,21 @@ export function useAuth() {
             nextUser.user_metadata?.full_name ||
             email.split("@")[0] ||
             "member";
-          await supabase.from("users").upsert(
-            {
-              id: nextUser.id,
-              name,
-              email,
-              plan: "free",
-            },
-            { onConflict: "id" }
-          );
+          // Do not await — avoids competing with the home directory fetch right after OAuth redirect.
+          void supabase
+            .from("users")
+            .upsert(
+              {
+                id: nextUser.id,
+                name,
+                email,
+                plan: "free",
+              },
+              { onConflict: "id" }
+            )
+            .then(({ error }) => {
+              if (error) console.error("[auth] users upsert", error);
+            });
           setPlan("free");
         }
         return;

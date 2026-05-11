@@ -17,6 +17,10 @@ function copyMembersCache() {
   return _membersCache.map((m) => ({ ...m }));
 }
 
+/** Directory list columns only — avoids huge rows (e.g. gallery json) slowing first load after OAuth. */
+const MEMBERS_DIRECTORY_SELECT =
+  "id,name,city,area,pin,country,company,role,rating,phone,wa,photo_initials,avatar_url,youtube_url,color,slug,likes,verified,plan,badges,joined_date,team_size,earnings,follower_count,following_count,owner_id";
+
 function filterMembersBySearch(members, searchTerm) {
   const q = String(searchTerm || "").trim().toLowerCase();
   if (!q) return members;
@@ -137,7 +141,10 @@ function Home({
       }
       setLoadError(false);
       try {
-        const queryPromise = supabase.from("members").select("*").then((res) => ({ kind: "result", res }));
+        const queryPromise = supabase
+          .from("members")
+          .select(MEMBERS_DIRECTORY_SELECT)
+          .then((res) => ({ kind: "result", res }));
 
         const timeoutPromise = new Promise((resolve) =>
           window.setTimeout(() => resolve({ kind: "timeout" }), MEMBERS_FETCH_TIMEOUT_MS)
