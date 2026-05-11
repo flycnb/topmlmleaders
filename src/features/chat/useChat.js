@@ -154,15 +154,19 @@ export function useChat(user, member) {
       const body = String(text || "").trim();
       if (!body || !conversationId || !user?.id || peerMissing) return;
 
-      await supabase.from("messages").insert({
+      const { error: insertError } = await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_id: user.id,
+        sender_name: user.name || null,
         text: body,
-        read: false,
-        created_at: new Date().toISOString(),
       });
 
-      await supabase
+      if (insertError) {
+        console.error("[chat] messages insert failed", insertError);
+        return;
+      }
+
+      const { error: convError } = await supabase
         .from("conversations")
         .update({
           last_message: body,
@@ -170,18 +174,11 @@ export function useChat(user, member) {
         })
         .eq("id", conversationId);
 
-      if (member?.ownerId) {
-        await supabase.from("notifications").insert({
-          user_id: member.ownerId,
-          type: "message",
-          from_name: user.name || "Member",
-          text: `${user.name || "Member"} sent you a message`,
-          read: false,
-          created_at: new Date().toISOString(),
-        });
+      if (convError) {
+        console.error("[chat] conversations update failed", convError);
       }
     },
-    [conversationId, user?.id, user?.name, member?.ownerId, peerMissing]
+    [conversationId, user?.id, user?.name, peerMissing]
   );
 
   return useMemo(

@@ -969,6 +969,10 @@ begin
     return new;
   end if;
 
+  if not exists (select 1 from public.users u where u.id = v_other) then
+    return new;
+  end if;
+
   select m.slug into v_slug
   from public.members m
   where m.owner_id = new.sender_id
