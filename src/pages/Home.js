@@ -10,6 +10,13 @@ import Leaderboard from "./Leaderboard";
 import Board from "./Board";
 import Plans from "./Plans";
 
+/** Module-level directory cache so remount/back navigation keeps public members visible. */
+let _membersCache = [];
+
+function copyMembersCache() {
+  return _membersCache.map((m) => ({ ...m }));
+}
+
 function filterMembersBySearch(members, searchTerm) {
   const q = String(searchTerm || "").trim().toLowerCase();
   if (!q) return members;
@@ -70,8 +77,8 @@ function Home({
 }) {
   const [activeTab, setActiveTab] = useState("directory");
   const [searchTerm, setSearchTerm] = useState("");
-  const [members, setMembers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [members, setMembers] = useState(copyMembersCache);
+  const [isLoading, setIsLoading] = useState(() => _membersCache.length === 0);
   const [loadError, setLoadError] = useState(false);
   const [columns, setColumns] = useState(1);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -120,15 +127,14 @@ function Home({
   }
 
   useEffect(() => {
-    if (signingOut || loadingAuth) {
-      return undefined;
-    }
-
     const MEMBERS_FETCH_TIMEOUT_MS = 15000;
 
     let canceled = false;
-    async function loadMembers() {
-      setIsLoading(true);
+    async function loadMembersFromNetwork() {
+      const hadCacheBeforeFetch = _membersCache.length > 0;
+      if (!hadCacheBeforeFetch) {
+        setIsLoading(true);
+      }
       setLoadError(false);
       try {
         const queryPromise = supabase.from("members").select("*").then((res) => ({ kind: "result", res }));
@@ -142,9 +148,15 @@ function Home({
         if (canceled) return;
 
         if (outcome.kind === "timeout") {
-          console.warn("[home] members load timed out after 15s — showing empty directory");
-          setMembers([]);
-          setLoadError(false);
+          if (_membersCache.length > 0) {
+            console.warn("[home] members load timed out — showing cached directory");
+            setMembers(copyMembersCache());
+            setLoadError(false);
+          } else {
+            console.warn("[home] members load timed out after 15s — no cache, empty directory");
+            setMembers([]);
+            setLoadError(false);
+          }
           return;
         }
 
@@ -152,29 +164,43 @@ function Home({
 
         if (error) {
           console.error("[home] members load", error);
-          setMembers([]);
-          setLoadError(true);
+          if (_membersCache.length > 0) {
+            setMembers(copyMembersCache());
+            setLoadError(false);
+          } else {
+            setMembers([]);
+            setLoadError(true);
+          }
           return;
         }
 
         if (!data?.length) {
-          setMembers([]);
+          if (_membersCache.length > 0) {
+            setMembers(copyMembersCache());
+            setLoadError(false);
+          } else {
+            _membersCache = [];
+            setMembers([]);
+            setLoadError(false);
+          }
           return;
         }
 
         const mapped = mapMembers(data);
-        setMembers(sortMembers(mapped));
+        const sorted = sortMembers(mapped);
+        _membersCache = sorted.map((item) => ({ ...item }));
+        setMembers(copyMembersCache());
       } finally {
         if (!canceled) setIsLoading(false);
       }
     }
 
-    loadMembers();
+    loadMembersFromNetwork();
 
     return () => {
       canceled = true;
     };
-  }, [signingOut, loadingAuth]);
+  }, []);
 
   useEffect(() => {
     function onResize() {
@@ -222,6 +248,9 @@ function Home({
     toggleFollow(member, ({ memberId: id, followerCount }) => {
       setMembers((prev) =>
         prev.map((item) => (item.id === id ? { ...item, followerCount } : item))
+      );
+      _membersCache = _membersCache.map((item) =>
+        item.id === id ? { ...item, followerCount } : item
       );
     });
   }

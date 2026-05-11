@@ -32,6 +32,7 @@ export function useAuth() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [oauthRedirecting, setOauthRedirecting] = useState(false);
+  /** Blocks session UI (e.g. Home header overlay); public directory fetch ignores this. */
   const [signingOut, setSigningOut] = useState(false);
   const [plan, setPlan] = useState("free");
   const bootstrapDoneRef = useRef(false);
