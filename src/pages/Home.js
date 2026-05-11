@@ -131,11 +131,7 @@ function Home({
       setIsLoading(true);
       setLoadError(false);
       try {
-        const queryPromise = supabase
-          .from("members")
-          .select("*")
-          .order("follower_count", { ascending: false, nullsFirst: false })
-          .then((res) => ({ kind: "result", res }));
+        const queryPromise = supabase.from("members").select("*").then((res) => ({ kind: "result", res }));
 
         const timeoutPromise = new Promise((resolve) =>
           window.setTimeout(() => resolve({ kind: "timeout" }), MEMBERS_FETCH_TIMEOUT_MS)
