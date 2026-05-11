@@ -72,6 +72,8 @@ export function useBookmarks(user, onAuthRequired) {
       created_at: new Date().toISOString(),
     });
     if (error) {
+      // Unique-constraint conflicts mean the bookmark already exists; keep optimistic state.
+      if (error.code === "23505" || error.code === "409") return;
       setBookmarkedIds((prev) => {
         const next = new Set(prev);
         next.delete(memberId);
