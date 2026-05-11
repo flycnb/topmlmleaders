@@ -46,18 +46,37 @@ function isBookmarkDuplicateInsertError(error) {
 }
 
 export function useBookmarks(user, onAuthRequired) {
+  const [myMemberId, setMyMemberId] = useState(null);
   const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
-    async function loadBookmarks() {
+    async function initBookmarks() {
       if (!user?.id) {
+        setMyMemberId(null);
         setBookmarkedIds(new Set());
+        setLoading(false);
         return;
       }
+      setMyMemberId(null);
+      setBookmarkedIds(new Set());
       setLoading(true);
-      const { data, error } = await supabase.from("bookmarks").select("*").eq("member_id", user.id);
+      const { data: myRow, error: myErr } = await supabase
+        .from("members")
+        .select("id")
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (!active) return;
+      if (myErr || !myRow?.id) {
+        if (myErr) console.error("[bookmarks] resolve my member id failed", myErr);
+        setMyMemberId(null);
+        setBookmarkedIds(new Set());
+        setLoading(false);
+        return;
+      }
+      setMyMemberId(myRow.id);
+      const { data, error } = await supabase.from("bookmarks").select("*").eq("member_id", myRow.id);
       if (!active) return;
       if (error) {
         console.error("[bookmarks] load failed", error);
@@ -69,7 +88,7 @@ export function useBookmarks(user, onAuthRequired) {
       setBookmarkedIds(new Set(ids));
       setLoading(false);
     }
-    loadBookmarks();
+    void initBookmarks();
     return () => {
       active = false;
     };
@@ -87,6 +106,7 @@ export function useBookmarks(user, onAuthRequired) {
       onAuthRequired?.();
       return;
     }
+    if (!myMemberId) return;
     const memberId = member?.id;
     if (!memberId) return;
     const wasBookmarked = bookmarkedIds.has(memberId);
@@ -102,7 +122,7 @@ export function useBookmarks(user, onAuthRequired) {
       const { error } = await supabase
         .from("bookmarks")
         .delete()
-        .eq("member_id", user.id)
+        .eq("member_id", myMemberId)
         .eq("saved_member_id", memberId);
       if (error) {
         setBookmarkedIds((prev) => new Set(prev).add(memberId));
@@ -111,21 +131,11 @@ export function useBookmarks(user, onAuthRequired) {
     }
 
     const { error } = await supabase.from("bookmarks").insert({
-      member_id: user.id,
+      member_id: myMemberId,
       saved_member_id: memberId,
       created_at: new Date().toISOString(),
     });
     if (error) {
-      console.log(
-        "[bookmark] error object:",
-        JSON.stringify(error),
-        "status:",
-        error?.status,
-        "code:",
-        error?.code,
-        "message:",
-        error?.message
-      );
       // Duplicate bookmark: treat as success (keep optimistic UI; no rollback / no surfaced error).
       if (isBookmarkDuplicateInsertError(error)) return;
       setBookmarkedIds((prev) => {
