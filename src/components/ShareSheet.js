@@ -12,7 +12,7 @@ const OPTIONS = [
 function ShareSheet({ open, onClose, member }) {
   if (!open || !member) return null;
 
-  const profileUrl = `https://topmlmleaders.com/${member.slug || member.id || ""}`;
+  const profileUrl = `https://topmlmleaders.com/u/${member.slug || member.id || ""}`;
   const encodedUrl = encodeURIComponent(profileUrl);
   const message = `Check out ${member.name}'s MLM profile!\n${member.role} | ${member.company} | ${member.city}\n⭐${member.rating || 0} | 👥${member.teamSize || "-"} | 💰${member.earnings || "-"}\n${profileUrl}`;
   const encodedMessage = encodeURIComponent(message);
