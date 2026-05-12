@@ -55,6 +55,27 @@ export default async function handler(req, res) {
     ? member.avatar_url
     : `${siteUrl}/logo192.png`;
 
+  const ua = String(req.headers["user-agent"] || "").toLowerCase();
+  const isBot =
+    /whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingpreview|embedly/i.test(
+      ua
+    );
+
+  // Real users → serve built index.html directly
+  if (!isBot) {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const indexPath = path.join(process.cwd(), "build", "index.html");
+      const html = fs.readFileSync(indexPath, "utf8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(html);
+    } catch {
+      res.setHeader("Location", "/");
+      return res.status(302).send("");
+    }
+  }
+
   // Return HTML with OG tags + React app loads normally
   const html = `<!DOCTYPE html>
 <html lang="en">
