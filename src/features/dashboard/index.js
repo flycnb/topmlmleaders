@@ -89,6 +89,8 @@ function canCustomizeProfileSlug(plan) {
   return p === "pro" || p === "elite";
 }
 
+const MS_PER_DAY = 86400000;
+
 function planCapsForMemberPlan(plan) {
   const p = String(plan || "free").toLowerCase();
   const unlimited = p === "elite" || p === "company";
@@ -270,6 +272,7 @@ function Dashboard({
   const [slugDraft, setSlugDraft] = useState("");
   const [slugSettingsStatus, setSlugSettingsStatus] = useState("");
   const [savingSlug, setSavingSlug] = useState(false);
+  const [referralCount, setReferralCount] = useState(null);
 
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
@@ -532,6 +535,81 @@ function Dashboard({
     // Only re-sync when server slug or member row changes — avoids wiping unsaved slug edits when name changes on Profile tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional narrow deps
   }, [myMember?.id, myMember?.slug]);
+
+  useEffect(() => {
+    if (!user?.id || loading) return undefined;
+    let active = true;
+    (async () => {
+      const { count, error } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("referred_by", String(user.id));
+      if (!active) return;
+      if (error) {
+        console.warn("[dashboard] referral count", error.message);
+        setReferralCount(0);
+        return;
+      }
+      setReferralCount(count ?? 0);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, loading]);
+
+  useEffect(() => {
+    if (
+      referralCount === null ||
+      !user?.id ||
+      !myMember?.id ||
+      myMember.owner_id !== user.id
+    ) {
+      return undefined;
+    }
+    const bonus5 = Boolean(myMember.referral_bonus_5_applied);
+    const bonus10 = Boolean(myMember.referral_bonus_10_applied);
+    let baseMs = Math.max(
+      Date.now(),
+      myMember.plan_expires_at ? new Date(myMember.plan_expires_at).getTime() : 0
+    );
+    const patches = {};
+    if (referralCount >= 5 && !bonus5) {
+      baseMs += 30 * MS_PER_DAY;
+      patches.referral_bonus_5_applied = true;
+    }
+    if (referralCount >= 10 && !bonus10) {
+      baseMs += 90 * MS_PER_DAY;
+      patches.referral_bonus_10_applied = true;
+    }
+    if (Object.keys(patches).length === 0) return undefined;
+
+    patches.plan_expires_at = new Date(baseMs).toISOString();
+    patches.updated_at = new Date().toISOString();
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .update(patches)
+        .eq("id", myMember.id)
+        .eq("owner_id", user.id)
+        .select("*")
+        .maybeSingle();
+      if (cancelled || error) return;
+      if (data) setMyMember(data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    referralCount,
+    user?.id,
+    myMember?.id,
+    myMember?.owner_id,
+    myMember?.referral_bonus_5_applied,
+    myMember?.referral_bonus_10_applied,
+    myMember?.plan_expires_at,
+  ]);
 
   useEffect(() => {
     if (!user?.id || !myMember?.id || loading) return;
@@ -2370,28 +2448,99 @@ function Dashboard({
   }
 
   function renderRefer() {
-    const refSlug = slugify(user.name || user.email || "member");
-    const referralLink = `https://topmlmleaders.com/ref/${refSlug}`;
+    const refSlug = memberPublicSlugSegment(myMember, profileForm.name, user?.name);
+    const referralLink = refSlug
+      ? `https://topmlmleaders.com?ref=${encodeURIComponent(refSlug)}`
+      : "https://topmlmleaders.com";
+    const count = referralCount ?? 0;
+    const goalFirstReward = 5;
+    const progressPct = Math.min(100, Math.round((Math.min(count, goalFirstReward) / goalFirstReward) * 100));
+    const rewardDaysEarned =
+      (myMember?.referral_bonus_5_applied ? 30 : 0) + (myMember?.referral_bonus_10_applied ? 90 : 0);
+    const expiresLabel = myMember?.plan_expires_at
+      ? new Date(myMember.plan_expires_at).toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+
     return (
       <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
-        <h3 style={{ margin: "0 0 10px" }}>Refer & Earn</h3>
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, marginBottom: 10 }}>{referralLink}</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button type="button" onClick={async () => navigator.clipboard.writeText(referralLink)} style={{ border: "1px solid var(--color-border)", background: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}>
-            Copy
+        <h3 style={{ margin: "0 0 10px" }}>Refer &amp; Earn</h3>
+        <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--color-muted)" }}>
+          Share your link. When someone joins TopMLMLeaders from your link, it counts as a referral.
+        </p>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, marginBottom: 10, wordBreak: "break-all", fontSize: 14 }}>
+          {referralLink}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={async () => navigator.clipboard.writeText(referralLink)}
+            style={{ border: "1px solid var(--color-border)", background: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}
+          >
+            Copy link
           </button>
-          <button type="button" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join me on TopMLMLeaders: ${referralLink}`)}`, "_blank", "noopener")} style={{ border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}>
+          <button
+            type="button"
+            onClick={() =>
+              window.open(
+                `https://wa.me/?text=${encodeURIComponent(`Join me on TopMLMLeaders: ${referralLink}`)}`,
+                "_blank",
+                "noopener"
+              )
+            }
+            style={{ border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}
+          >
             Share on WhatsApp
           </button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, textAlign: "center" }}><strong>0</strong><div style={{ fontSize: 12, color: "var(--color-muted)" }}>Total referrals</div></div>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, textAlign: "center" }}><strong>₹0</strong><div style={{ fontSize: 12, color: "var(--color-muted)" }}>Earnings</div></div>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, textAlign: "center" }}><strong>₹0</strong><div style={{ fontSize: 12, color: "var(--color-muted)" }}>This month</div></div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+            <span style={{ fontWeight: 700 }}>Progress to 1 month free Pro</span>
+            <span style={{ fontSize: 13, color: "var(--color-muted)" }}>
+              {count}/{goalFirstReward} referrals
+            </span>
+          </div>
+          <div style={{ height: 10, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${progressPct}%`,
+                borderRadius: 999,
+                background: "linear-gradient(90deg, var(--color-primary), #4338CA)",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--color-muted)" }}>
+            Milestones: 5 referrals → +30 days on your plan expiry · 10 referrals → +90 days (stacked).
+          </p>
         </div>
-        <div style={{ marginTop: 12, background: "#EEF2FF", color: "var(--color-primary)", borderRadius: 10, padding: 10, fontWeight: 600 }}>
-          Referral rewards launching soon!
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+            <strong style={{ fontSize: 22 }}>{referralCount === null ? "…" : count}</strong>
+            <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>People referred</div>
+          </div>
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+            <strong style={{ fontSize: 22 }}>{rewardDaysEarned}</strong>
+            <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>Reward days earned</div>
+          </div>
         </div>
+
+        {expiresLabel ? (
+          <div style={{ fontSize: 13, color: "var(--color-muted)", marginBottom: 8 }}>
+            Plan perks extended through <strong style={{ color: "var(--color-text, #111827)" }}>{expiresLabel}</strong>{" "}
+            (includes referral bonuses).
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: "var(--color-muted)", marginBottom: 8 }}>
+            Referral rewards extend your <strong>plan_expires_at</strong> on your member profile (see milestones above).
+          </div>
+        )}
       </section>
     );
   }

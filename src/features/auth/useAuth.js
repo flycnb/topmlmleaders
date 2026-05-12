@@ -1,5 +1,91 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { PENDING_REF_STORAGE_KEY } from "../../lib/referrals";
+
+async function resolveReferrerUserIdFromSlug(currentUserId, rawSlug) {
+  const slug = String(rawSlug || "")
+    .trim()
+    .toLowerCase();
+  if (!slug) return null;
+  const { data, error } = await supabase
+    .from("members")
+    .select("owner_id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error || !data?.owner_id || data.owner_id === currentUserId) return null;
+  return data.owner_id;
+}
+
+/**
+ * Upsert public.users row, assign deterministic referral_code once, attach referred_by from ?ref= slug.
+ */
+async function syncPublicUserRow(nextUser) {
+  const email = nextUser.email || "";
+  const name =
+    nextUser.user_metadata?.name ||
+    nextUser.user_metadata?.full_name ||
+    email.split("@")[0] ||
+    "member";
+
+  await supabase.from("users").upsert(
+    {
+      id: nextUser.id,
+      name,
+      email,
+      plan: "free",
+    },
+    { onConflict: "id" }
+  );
+
+  const { data: row } = await supabase
+    .from("users")
+    .select("referral_code, referred_by")
+    .eq("id", nextUser.id)
+    .maybeSingle();
+
+  let pendingRef = null;
+  try {
+    pendingRef = sessionStorage.getItem(PENDING_REF_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+
+  const updates = {};
+  if (!row?.referral_code) {
+    updates.referral_code = `u${String(nextUser.id).replace(/-/g, "")}`;
+  }
+
+  let clearPendingRef = false;
+  if (!row?.referred_by && pendingRef) {
+    const referrerId = await resolveReferrerUserIdFromSlug(nextUser.id, pendingRef);
+    if (referrerId) {
+      updates.referred_by = referrerId;
+    } else {
+      clearPendingRef = true;
+    }
+  } else if (pendingRef && row?.referred_by) {
+    clearPendingRef = true;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    const { error } = await supabase.from("users").update(updates).eq("id", nextUser.id);
+    if (error) {
+      console.error("[auth] users referral sync", error);
+      return;
+    }
+    if (updates.referred_by) {
+      clearPendingRef = true;
+    }
+  }
+
+  if (clearPendingRef && pendingRef) {
+    try {
+      sessionStorage.removeItem(PENDING_REF_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 function mapUser(session, plan = "free") {
   const user = session?.user;
@@ -55,6 +141,9 @@ export function useAuth() {
 
       if (event === "INITIAL_SESSION") {
         applySessionAndFinishBootstrap(nextSession);
+        if (nextSession?.user?.id) {
+          void syncPublicUserRow(nextSession.user);
+        }
         return;
       }
 
@@ -62,27 +151,8 @@ export function useAuth() {
         applySessionAndFinishBootstrap(nextSession);
         const nextUser = nextSession?.user;
         if (nextUser?.id) {
-          const email = nextUser.email || "";
-          const name =
-            nextUser.user_metadata?.name ||
-            nextUser.user_metadata?.full_name ||
-            email.split("@")[0] ||
-            "member";
           // Do not await — avoids competing with the home directory fetch right after OAuth redirect.
-          void supabase
-            .from("users")
-            .upsert(
-              {
-                id: nextUser.id,
-                name,
-                email,
-                plan: "free",
-              },
-              { onConflict: "id" }
-            )
-            .then(({ error }) => {
-              if (error) console.error("[auth] users upsert", error);
-            });
+          void syncPublicUserRow(nextUser);
           setPlan("free");
         }
         return;

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import "./App.css";
 import Home from "./pages/Home";
 import ProfilePage from "./pages/ProfilePage";
@@ -11,9 +11,25 @@ import { useAuth } from "./features/auth/useAuth";
 import { useFollow } from "./features/follow/useFollow";
 import { useBookmarks } from "./features/bookmarks/useBookmarks";
 import { supabase } from "./lib/supabaseClient";
+import { PENDING_REF_STORAGE_KEY } from "./lib/referrals";
 import { mapMembers } from "./features/search";
 
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
+
+/** Persist ?ref=slug for signup attribution (Refer & Earn). */
+function captureReferralFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get("ref");
+    if (!raw || !String(raw).trim()) return;
+    sessionStorage.setItem(PENDING_REF_STORAGE_KEY, String(raw).trim());
+    url.searchParams.delete("ref");
+    const qs = url.searchParams.toString();
+    window.history.replaceState({}, "", `${url.pathname}${qs ? `?${qs}` : ""}${url.hash}`);
+  } catch {
+    /* ignore */
+  }
+}
 
 function profilePathFromMember(member) {
   if (!member) return "/";
@@ -24,12 +40,17 @@ function profilePathFromMember(member) {
 
 function AppRoutes() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showAuth, setShowAuth] = useState(false);
   const [chatMember, setChatMember] = useState(null);
   const { user, loading, oauthRedirecting, signingOut, signInWithGoogle, signOut } = useAuth();
   const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
   const { isBookmarked, toggleBookmark } = useBookmarks(user, () => setShowAuth(true));
   const hadUserRef = useRef(false);
+
+  useEffect(() => {
+    captureReferralFromUrl();
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const url = new URL(window.location.href);

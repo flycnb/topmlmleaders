@@ -87,6 +87,9 @@ alter table public.members add column if not exists team_size text;
 alter table public.members add column if not exists earnings text;
 alter table public.members add column if not exists follower_count integer default 0;
 alter table public.members add column if not exists following_count integer default 0;
+alter table public.members add column if not exists plan_expires_at timestamptz;
+alter table public.members add column if not exists referral_bonus_5_applied boolean not null default false;
+alter table public.members add column if not exists referral_bonus_10_applied boolean not null default false;
 alter table public.members add column if not exists owner_id uuid references auth.users(id) on delete set null;
 alter table public.members add column if not exists created_at timestamptz default now();
 alter table public.members add column if not exists updated_at timestamptz default now();
@@ -269,6 +272,7 @@ end $$;
 
 create unique index if not exists idx_users_email_unique on public.users(email);
 create unique index if not exists idx_users_referral_code_unique on public.users(referral_code);
+create index if not exists idx_users_referred_by on public.users(referred_by);
 
 -- =========================================================
 -- BOOKINGS
@@ -686,7 +690,10 @@ create policy "users_select_own"
 on public.users
 for select
 to authenticated
-using (id = auth.uid());
+using (
+  id = auth.uid()
+  or referred_by = auth.uid()::text
+);
 
 drop policy if exists "users_insert_own" on public.users;
 create policy "users_insert_own"
