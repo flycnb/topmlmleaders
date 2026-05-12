@@ -1,3 +1,11 @@
+function escapeAttr(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export default async function handler(req, res) {
   const { slug } = req.query;
 
@@ -57,9 +65,8 @@ export default async function handler(req, res) {
 
   const ua = String(req.headers["user-agent"] || "").toLowerCase();
   const isBot =
-    /whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingpreview|embedly/i.test(
-      ua
-    );
+    /facebookexternalhit|facebot|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingpreview|embedly/i
+    .test(ua);
 
   // Real users → serve built index.html directly
   if (!isBot) {
@@ -87,19 +94,19 @@ export default async function handler(req, res) {
 
   <!-- Open Graph (WhatsApp, Facebook, Telegram) -->
   <meta property="og:type" content="profile" />
-  <meta property="og:url" content="${profileUrl}" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${description}" />
-  <meta property="og:image" content="${image}" />
+  <meta property="og:url" content="${escapeAttr(profileUrl)}" />
+  <meta property="og:title" content="${escapeAttr(title)}" />
+  <meta property="og:description" content="${escapeAttr(description)}" />
+  <meta property="og:image" content="${escapeAttr(image)}" />
   <meta property="og:image:width" content="400" />
   <meta property="og:image:height" content="400" />
   <meta property="og:site_name" content="TopMLMLeaders.com" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="${title}" />
-  <meta name="twitter:description" content="${description}" />
-  <meta name="twitter:image" content="${image}" />
+  <meta name="twitter:title" content="${escapeAttr(title)}" />
+  <meta name="twitter:description" content="${escapeAttr(description)}" />
+  <meta name="twitter:image" content="${escapeAttr(image)}" />
 
   <meta name="theme-color" content="#6C63FF" />
   <link rel="stylesheet" 
