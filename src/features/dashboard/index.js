@@ -1956,7 +1956,10 @@ function Dashboard({
             </button>
           </div>
           <div style={{ marginTop: 14, background: "#F8FAFC", borderRadius: 12, padding: 12 }}>
-            <div style={{ marginBottom: 8, fontWeight: 700 }}>Profile QR Code</div>
+            <div style={{ marginBottom: 4, fontWeight: 700, fontSize: 15 }}>📲 Your Smart QR Code</div>
+            <div style={{ marginBottom: 8, fontSize: 13, color: "var(--color-muted)" }}>
+              Just scan to save your contact automatically
+            </div>
             <QRCodeCanvas id={qrId} value={profileVcard} size={160} includeMargin />
             <div style={{ marginTop: 8 }}>
               <button type="button" onClick={downloadQr} style={{ border: "none", background: "var(--color-primary)", color: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}>

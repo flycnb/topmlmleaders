@@ -23,6 +23,7 @@ function MemberCard({
   onViewProfile,
 }) {
   const badge = planBadge(member.plan);
+  const waPrivate = (member.wa_visibility || member.waVisibility || "public") === "private";
 
   const openWhatsApp = () => {
     if (!isLoggedIn) {
@@ -30,7 +31,13 @@ function MemberCard({
       return;
     }
     if (!member.wa) return;
-    window.open(`https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`, "_blank", "noopener");
+    const vis = member.wa_visibility || member.waVisibility || "public";
+    if (vis === "private") return;
+    window.open(
+      `https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`,
+      "_blank",
+      "noopener"
+    );
   };
 
   const onFollowClick = () => {
@@ -138,8 +145,18 @@ function MemberCard({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
             <button
               type="button"
+              disabled={waPrivate}
               onClick={openWhatsApp}
-              style={{ borderRadius: 10, border: "1px solid #D1FAE5", background: "#ECFDF5", color: "#10B981", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
+              style={{
+                borderRadius: 10,
+                border: "1px solid #D1FAE5",
+                background: "#ECFDF5",
+                color: "#10B981",
+                fontWeight: 700,
+                padding: "8px 6px",
+                opacity: waPrivate ? 0.35 : 1,
+                cursor: waPrivate ? "default" : "pointer",
+              }}
             >
               💬 Message
             </button>

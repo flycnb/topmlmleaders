@@ -133,7 +133,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   const [rated, setRated] = useState(false);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [ratingError, setRatingError] = useState("");
-  const [lightbox, setLightbox] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [showFlag, setShowFlag] = useState(false);
   const fileRef = useRef(null);
   const [profileProducts, setProfileProducts] = useState([]);
@@ -145,6 +145,15 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
   }, [member?.id]);
 
   useEffect(() => {
+    window.history.pushState({ profile: true }, "");
+    const handlePop = () => {
+      window.history.pushState({ profile: true }, "");
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
+  useEffect(() => {
     const normalized = normalizeMember(member) || {};
     setLiveMember(normalized);
     setFollowers(Number(normalized.followerCount || 0));
@@ -152,6 +161,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
     setStar(0);
     setRated(false);
     setRatingError("");
+    setLightboxIndex(null);
   }, [member]);
 
   useEffect(() => {
@@ -652,7 +662,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
             <button
               key={`${url}-${index}`}
               type="button"
-              onClick={() => setLightbox(url)}
+              onClick={() => setLightboxIndex(index)}
               style={{
                 position: "relative",
                 width: "100%",
@@ -895,34 +905,118 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       />
       {showShare ? <ShareSheet open={showShare} onClose={() => setShowShare(false)} member={{ ...liveMember, teamSize: liveMember.teamSize || "-" }} /> : null}
       {showQr ? <QRCodeModal open={showQr} onClose={() => setShowQr(false)} member={liveMember} /> : null}
-      {lightbox ? (
+      {lightboxIndex !== null && galleryPhotoUrls.length > 0 ? (
         <div
-          role="presentation"
-          onClick={() => setLightbox("")}
+          onClick={() => setLightboxIndex(null)}
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 100,
-            background: "rgba(0,0,0,0.9)",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
-            cursor: "pointer",
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          {/^https?:\/\//i.test(lightbox) ? (
-            <img
-              src={lightbox}
-              alt=""
-              onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: "100%", maxHeight: "90vh", objectFit: "contain", borderRadius: 8, cursor: "default" }}
-            />
-          ) : (
-            <div style={{ textAlign: "center", color: "#FFFFFF" }}>
-              <div style={{ fontSize: 60 }}>📸</div>
-              <div>{lightbox}</div>
-            </div>
-          )}
+          {lightboxIndex > 0 ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex(lightboxIndex - 1);
+              }}
+              style={{
+                position: "absolute",
+                left: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.15)",
+                border: "none",
+                borderRadius: "50%",
+                width: 44,
+                height: 44,
+                color: "#FFFFFF",
+                fontSize: 22,
+                cursor: "pointer",
+                zIndex: 10000,
+              }}
+            >
+              ‹
+            </button>
+          ) : null}
+
+          <img
+            src={galleryPhotoUrls[lightboxIndex]}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "92vw",
+              maxHeight: "82vh",
+              borderRadius: 12,
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+
+          {lightboxIndex < galleryPhotoUrls.length - 1 ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex(lightboxIndex + 1);
+              }}
+              style={{
+                position: "absolute",
+                right: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.15)",
+                border: "none",
+                borderRadius: "50%",
+                width: 44,
+                height: 44,
+                color: "#FFFFFF",
+                fontSize: 22,
+                cursor: "pointer",
+                zIndex: 10000,
+              }}
+            >
+              ›
+            </button>
+          ) : null}
+
+          <div
+            style={{
+              position: "absolute",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              color: "rgba(255,255,255,0.7)",
+              fontSize: 13,
+            }}
+          >
+            {lightboxIndex + 1} / {galleryPhotoUrls.length}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(null)}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              background: "rgba(255,255,255,0.15)",
+              border: "none",
+              borderRadius: "50%",
+              width: 36,
+              height: 36,
+              color: "#FFFFFF",
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
         </div>
       ) : null}
     </div>

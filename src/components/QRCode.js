@@ -4,7 +4,8 @@ import { QRCodeCanvas } from "qrcode.react";
 function QRCodeModal({ open, onClose, member }) {
   if (!open || !member) return null;
 
-  const url = `https://topmlmleaders.com/${member.slug || member.id || ""}`;
+  const slug = member.slug || member.id || "";
+  const url = slug ? `https://topmlmleaders.com/u/${slug}` : "https://topmlmleaders.com";
   const qrId = "member-profile-qr";
 
   function handleDownload() {

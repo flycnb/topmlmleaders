@@ -6,6 +6,10 @@ Notes: Member control panel with live stats, editable profile, bookings, setting
 
 Media tab: gallery uploads go to Storage bucket **gallery** at path `{memberId}/{timestamp}.{ext}`; URLs are stored in **members.gallery_urls** (jsonb). Requires matching Storage RLS on **storage.objects** (see `docs/BUGS.md` BUG-007).
 
+## TICKET-004
+
+- Profile tab QR card heading **📲 Your Smart QR Code** + subtitle “Just scan to save your contact automatically”.
+
 ## TICKET-003
 
 - Media tab gallery thumbnails use **4:3** aspect ratio (was square).

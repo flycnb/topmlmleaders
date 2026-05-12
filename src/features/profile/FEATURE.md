@@ -4,6 +4,12 @@ Files: src/features/profile/index.js, src/components/ShareSheet.js, src/componen
 Database: members table, bookings table
 Notes: World class personal website profile with 7 tabs, share sheet, QR download, follow action, Join Us form, and Elite booking flow.
 
+## TICKET-004
+
+- Gallery tab lightbox uses **index** navigation with ‹ › controls, image counter, and close control.
+- **popstate**: extra history entry + listener so Android hardware back does not immediately leave the profile page.
+- Public QR URL for modal lives in **QRCode.js** (`/u/…`).
+
 ## TICKET-003
 
 - Contact Call / WhatsApp: logged-in viewers see alerts when phone or WhatsApp visibility is private (no tel/wa navigation).
