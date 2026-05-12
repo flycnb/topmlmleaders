@@ -304,7 +304,7 @@ function Home({
           }}
         >
           <h2 style={{ color: "#FFFFFF", fontSize: 32, margin: 0, fontWeight: 800, lineHeight: 1.1 }}>Find MLM Leaders Worldwide</h2>
-          <p style={{ color: "rgba(255,255,255,0.92)", marginTop: 10, fontSize: 15 }}>AI Powered Search · Connect · Grow Worldwide</p>
+          <p style={{ color: "rgba(255,255,255,0.92)", marginTop: 10, fontSize: 15 }}>Search Smarter. Connect Faster. Grow Bigger with AI</p>
           <div
             style={{
               marginTop: 16,
@@ -511,8 +511,8 @@ function Home({
             }}
             style={{ border: "none", background: "transparent", textAlign: "left", cursor: "pointer", padding: 0 }}
           >
-            <div style={{ fontWeight: 800, color: "var(--color-primary)", fontSize: 20 }}>🌐 TopMLMLeaders</div>
-            <div style={{ fontSize: 12, color: "var(--color-muted)" }}>AI Powered Search · Connect · Grow Worldwide</div>
+            <img src="/logo.png" alt="TopMLMLeaders" style={{ height: "40px", width: "auto", display: "block" }} />
+            <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>Search Smarter. Connect Faster. Grow Bigger with AI</div>
           </button>
           <nav style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }} aria-label="Site sections">
             <button type="button" aria-current={activeTab === "top" ? "page" : undefined} onClick={() => setActiveTab("top")} style={navTabStyle("top")}>
