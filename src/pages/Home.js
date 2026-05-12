@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { flushSync } from "react-dom";
 import { supabase } from "../lib/supabaseClient";
 import MemberCard from "../components/MemberCard";
@@ -650,6 +651,21 @@ function Home({
       ) : null}
       {activeTab === "board" ? <Board user={user} onAuthRequired={onAuthRequired} /> : null}
       {activeTab === "plans" ? <Plans /> : null}
+      <footer
+        style={{
+          padding: "20px 16px calc(20px + env(safe-area-inset-bottom))",
+          textAlign: "center",
+          borderTop: "1px solid var(--color-border)",
+          marginTop: "auto",
+        }}
+      >
+        <Link to="/privacy" style={{ color: "var(--color-muted)", fontSize: 12, marginRight: 16 }}>
+          Privacy Policy
+        </Link>
+        <Link to="/terms" style={{ color: "var(--color-muted)", fontSize: 12 }}>
+          Terms &amp; Conditions
+        </Link>
+      </footer>
     </div>
   );
 }

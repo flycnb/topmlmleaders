@@ -21,6 +21,9 @@ function QRCodeModal({ open, onClose, member }) {
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,0.55)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: 360, borderRadius: 20, background: "#FFFFFF", padding: 18, textAlign: "center" }}>
         <h3 style={{ marginTop: 4 }}>Scan My Profile</h3>
+        <p style={{ margin: "10px 0 12px", color: "var(--color-muted)", fontSize: 14, lineHeight: 1.5 }}>
+          Show this QR to save your contact automatically in your friend&apos;s mobile
+        </p>
         <div style={{ background: "#F8FAFC", borderRadius: 14, padding: 14, display: "inline-flex" }}>
           <QRCodeCanvas id={qrId} value={url} size={220} includeMargin />
         </div>

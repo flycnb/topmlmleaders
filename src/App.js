@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import "./App.css";
 import Home from "./pages/Home";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Terms from "./pages/Terms";
 import ProfilePage from "./pages/ProfilePage";
 import Dashboard from "./features/dashboard";
 import AdminPanel from "./features/admin";
@@ -213,6 +215,24 @@ function AppRoutes() {
                 onOpenProfile={openProfile}
                 onMessageNotificationOpen={openChatFromMessageNotification}
               />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
+          path="/privacy"
+          element={
+            <>
+              <PrivacyPolicy />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
+          path="/terms"
+          element={
+            <>
+              <Terms />
               {sharedModals}
             </>
           }

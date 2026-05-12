@@ -459,7 +459,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
                     onAuthRequired();
                     return;
                   }
-                  if (!phoneRaw || !phoneAllowed) return;
+                  if (!phoneAllowed) {
+                    alert("🔒 This member has kept their phone number private.");
+                    return;
+                  }
                   window.location.href = telHref;
                 }}
                 style={{
@@ -480,7 +483,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
                     onAuthRequired();
                     return;
                   }
-                  if (!waDigits || !waAllowed) return;
+                  if (!waAllowed) {
+                    alert("🔒 This member has kept their WhatsApp private.");
+                    return;
+                  }
                   window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");
                 }}
                 style={{
@@ -755,7 +761,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
           <button type="button" onClick={onBack} style={{ border: "none", borderRadius: 999, padding: "8px 12px", background: "rgba(255,255,255,0.2)", color: "#FFFFFF", fontWeight: 700 }}>← Back</button>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={() => setShowShare(true)} style={{ border: "none", borderRadius: 999, padding: "8px 12px", background: "rgba(255,255,255,0.2)", color: "#FFFFFF", fontWeight: 700 }}>↗ Share</button>
-            <button type="button" onClick={() => setShowQr(true)} style={{ border: "none", borderRadius: 999, padding: "8px 12px", background: "rgba(255,255,255,0.2)", color: "#FFFFFF", fontWeight: 700 }}>⬛ QR</button>
+            <button type="button" onClick={() => setShowQr(true)} style={{ border: "none", borderRadius: 999, padding: "8px 12px", background: "rgba(255,255,255,0.2)", color: "#FFFFFF", fontWeight: 700 }}>📲 Save Contact</button>
           </div>
         </div>
         <div style={{ textAlign: "center" }}>

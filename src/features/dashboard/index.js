@@ -2024,7 +2024,7 @@ function Dashboard({
                     borderRadius: 12,
                     overflow: "hidden",
                     border: "1px solid var(--color-border)",
-                    aspectRatio: "1 / 1",
+                    aspectRatio: "4 / 3",
                     background: "#F3F4F6",
                   }}
                 >

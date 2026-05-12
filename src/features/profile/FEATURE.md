@@ -4,6 +4,12 @@ Files: src/features/profile/index.js, src/components/ShareSheet.js, src/componen
 Database: members table, bookings table
 Notes: World class personal website profile with 7 tabs, share sheet, QR download, follow action, Join Us form, and Elite booking flow.
 
+## TICKET-003
+
+- Contact Call / WhatsApp: logged-in viewers see alerts when phone or WhatsApp visibility is private (no tel/wa navigation).
+- Header action labeled **📲 Save Contact** (opens QR modal).
+- **QRCode.js**: modal copy explains saving contact via QR for a friend’s phone.
+
 Avatar edit (owner): uploads to Storage bucket **avatars** with object key `{memberId}-{timestamp}.{ext}`; **members.avatar_url** is updated after upload. Storage policies should use **member_id_from_avatar_path** (see `supabase/migrations/20260506120000_storage_avatars.sql` and `docs/BUGS.md` BUG-007).
 
 Run in Supabase SQL editor:
