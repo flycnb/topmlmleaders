@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../../lib/supabaseClient";
 import { useNotifications } from "../notifications/useNotifications";
@@ -50,6 +51,42 @@ function slugify(text) {
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-");
+}
+
+/** Segment used in public profile URL `/u/{segment}` — stored slug, derived slug, or member id. */
+function memberPublicSlugSegment(member, profileNameFallback, userNameFallback) {
+  if (!member) {
+    return slugify(profileNameFallback || userNameFallback || "") || "";
+  }
+  const stored = member.slug && String(member.slug).trim();
+  if (stored) return stored;
+  const derived = slugify(profileNameFallback || userNameFallback || "");
+  if (derived) return derived;
+  return member.id != null ? String(member.id) : "";
+}
+
+function normalizeCustomSlugInput(raw) {
+  return String(raw || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function validateCustomSlug(normalized) {
+  if (!normalized || normalized.length < 3 || normalized.length > 30) {
+    return "Use 3–30 characters (lowercase letters, numbers, hyphens).";
+  }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized)) {
+    return "Use lowercase letters, numbers, and hyphens only.";
+  }
+  return null;
+}
+
+function canCustomizeProfileSlug(plan) {
+  const p = String(plan || "free").toLowerCase();
+  return p === "pro" || p === "elite";
 }
 
 function planCapsForMemberPlan(plan) {
@@ -229,6 +266,10 @@ function Dashboard({
   const [productPdfRowId, setProductPdfRowId] = useState(null);
   const [productPdfUploading, setProductPdfUploading] = useState(false);
   const claimOwnerAttemptedRef = useRef(false);
+  const navigate = useNavigate();
+  const [slugDraft, setSlugDraft] = useState("");
+  const [slugSettingsStatus, setSlugSettingsStatus] = useState("");
+  const [savingSlug, setSavingSlug] = useState(false);
 
   const { notifications, unreadCount, loading: notificationsLoading } =
     useNotifications(user);
@@ -238,9 +279,10 @@ function Dashboard({
   }, [bookmarks]);
 
   const profileUrl = useMemo(() => {
-    const slug = myMember?.slug || slugify(profileForm.name || user?.name);
-    return `https://topmlmleaders.com/${slug}`;
-  }, [myMember?.slug, profileForm.name, user?.name]);
+    const segment = memberPublicSlugSegment(myMember, profileForm.name, user?.name);
+    if (!segment) return "https://topmlmleaders.com/";
+    return `https://topmlmleaders.com/u/${encodeURIComponent(segment)}`;
+  }, [myMember, profileForm.name, user?.name]);
 
   const profileVcard = useMemo(() => {
     const slug =
@@ -475,6 +517,21 @@ function Dashboard({
       setLoading(false);
     };
   }, [authInitializing, user?.id, user?.name]);
+
+  useEffect(() => {
+    if (!myMember?.id) {
+      setSlugDraft("");
+      return;
+    }
+    const stored = myMember.slug && String(myMember.slug).trim();
+    setSlugDraft(
+      stored ||
+        slugify(profileForm.name || user?.name || "") ||
+        String(myMember.id)
+    );
+    // Only re-sync when server slug or member row changes — avoids wiping unsaved slug edits when name changes on Profile tab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional narrow deps
+  }, [myMember?.id, myMember?.slug]);
 
   useEffect(() => {
     if (!user?.id || !myMember?.id || loading) return;
@@ -1091,6 +1148,61 @@ function Dashboard({
     await navigator.clipboard.writeText(profileUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function saveSlug() {
+    if (!user?.id || !myMember?.id) return;
+    if (!canCustomizeProfileSlug(myMember.plan)) return;
+    const normalized = normalizeCustomSlugInput(slugDraft);
+    const validationErr = validateCustomSlug(normalized);
+    if (validationErr) {
+      setSlugSettingsStatus(validationErr);
+      return;
+    }
+    const current = myMember.slug && String(myMember.slug).trim();
+    if (normalized === current) {
+      setSlugSettingsStatus("✅ Profile URL is already up to date.");
+      return;
+    }
+    setSavingSlug(true);
+    setSlugSettingsStatus("");
+    try {
+      const { data: taken, error: qErr } = await supabase
+        .from("members")
+        .select("id")
+        .eq("slug", normalized)
+        .maybeSingle();
+      if (qErr) {
+        setSlugSettingsStatus(qErr.message);
+        return;
+      }
+      if (taken && taken.id !== myMember.id) {
+        setSlugSettingsStatus("This URL is already taken, try another");
+        return;
+      }
+      const { data: updated, error: uErr } = await supabase
+        .from("members")
+        .update({ slug: normalized, updated_at: new Date().toISOString() })
+        .eq("id", myMember.id)
+        .eq("owner_id", user.id)
+        .select("*")
+        .maybeSingle();
+      if (uErr) {
+        setSlugSettingsStatus(uErr.message);
+        return;
+      }
+      if (!updated) {
+        setSlugSettingsStatus("Could not update URL.");
+        return;
+      }
+      setMyMember(updated);
+      setSlugDraft(normalized);
+      setSlugSettingsStatus("✅ Profile URL saved!");
+    } catch (e) {
+      setSlugSettingsStatus(e instanceof Error ? e.message : "Could not save URL.");
+    } finally {
+      setSavingSlug(false);
+    }
   }
 
   async function confirmBooking(bookingId) {
@@ -2150,6 +2262,11 @@ function Dashboard({
   }
 
   function renderSettings() {
+    const slugSegment = memberPublicSlugSegment(myMember, profileForm.name, user?.name);
+    const fullProfileUrl = slugSegment
+      ? `https://topmlmleaders.com/u/${encodeURIComponent(slugSegment)}`
+      : "https://topmlmleaders.com/";
+    const slugEditable = canCustomizeProfileSlug(myMember?.plan);
     return (
       <div style={{ display: "grid", gap: 12 }}>
         <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
@@ -2158,8 +2275,70 @@ function Dashboard({
           <div style={{ marginBottom: 8, display: "inline-block", background: "#EEF2FF", color: "var(--color-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
             {(myMember?.plan || "free").toUpperCase()}
           </div>
-          <div>
-            <button type="button" style={{ border: "none", background: "#F59E0B", color: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--color-border)" }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Public profile URL</div>
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-muted)", wordBreak: "break-all" }}>{fullProfileUrl}</p>
+            <div style={{ marginBottom: 6, fontSize: 13, color: "var(--color-muted)" }}>
+              Slug: <strong style={{ color: "var(--color-text, #111827)" }}>{slugSegment || "—"}</strong>
+            </div>
+            {slugEditable ? (
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                <label htmlFor="dashboard-slug-input" style={{ fontSize: 13, fontWeight: 600 }}>
+                  Customize URL (Pro &amp; Elite)
+                </label>
+                <input
+                  id="dashboard-slug-input"
+                  value={slugDraft}
+                  onChange={(e) => setSlugDraft(normalizeCustomSlugInput(e.target.value))}
+                  placeholder="your-custom-url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: "10px 12px" }}
+                />
+                <p style={{ margin: 0, fontSize: 12, color: "var(--color-muted)" }}>
+                  3–30 characters · lowercase · letters, numbers, hyphens only
+                </p>
+                <button
+                  type="button"
+                  disabled={savingSlug || !myMember?.id}
+                  onClick={saveSlug}
+                  style={{
+                    justifySelf: "start",
+                    border: "none",
+                    borderRadius: 10,
+                    background: savingSlug || !myMember?.id ? "#D1D5DB" : "var(--color-primary)",
+                    color: "#FFFFFF",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    cursor: savingSlug || !myMember?.id ? "default" : "pointer",
+                  }}
+                >
+                  {savingSlug ? "Saving…" : "Save URL"}
+                </button>
+                {slugSettingsStatus ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      color: slugSettingsStatus.startsWith("✅") ? "#059669" : "#DC2626",
+                    }}
+                  >
+                    {slugSettingsStatus}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--color-muted)" }}>
+                Upgrade to Pro to customize your URL
+              </p>
+            )}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={() => navigate("/plans")}
+              style={{ border: "none", background: "#F59E0B", color: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700, cursor: "pointer" }}
+            >
               Upgrade Plan
             </button>
           </div>

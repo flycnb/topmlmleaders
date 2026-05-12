@@ -197,6 +197,31 @@ function AppRoutes() {
           }
         />
         <Route
+          path="/plans"
+          element={
+            <>
+              <Home
+                user={user}
+                loadingAuth={loading}
+                signingOut={signingOut}
+                onSignOut={signOut}
+                onAuthRequired={onAuthRequired}
+                isFollowing={isFollowing}
+                toggleFollow={toggleFollow}
+                isBookmarked={isBookmarked}
+                toggleBookmark={toggleBookmark}
+                onOpenChat={openChat}
+                onOpenDashboard={() => navigate("/dashboard")}
+                onOpenAdmin={() => navigate("/admin")}
+                onOpenProfile={openProfile}
+                onMessageNotificationOpen={openChatFromMessageNotification}
+                defaultActiveTab="plans"
+              />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <>

@@ -79,8 +79,9 @@ function Home({
   onOpenAdmin,
   onOpenProfile,
   onMessageNotificationOpen,
+  defaultActiveTab = "directory",
 }) {
-  const [activeTab, setActiveTab] = useState("directory");
+  const [activeTab, setActiveTab] = useState(defaultActiveTab);
   const [searchTerm, setSearchTerm] = useState("");
   const [members, setMembers] = useState(copyMembersCache);
   const [isLoading, setIsLoading] = useState(() => _membersCache.length === 0);
