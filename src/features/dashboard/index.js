@@ -222,6 +222,7 @@ function Dashboard({
   const [bookmarkSearch, setBookmarkSearch] = useState("");
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
   const [verificationForm, setVerificationForm] = useState({
     reason: "",
     proofLink: "",
@@ -1226,6 +1227,42 @@ function Dashboard({
     await navigator.clipboard.writeText(profileUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function getReferralUrl() {
+    const refSlug = memberPublicSlugSegment(myMember, profileForm.name, user?.name);
+    return refSlug
+      ? `https://topmlmleaders.com?ref=${encodeURIComponent(refSlug)}`
+      : "https://topmlmleaders.com";
+  }
+
+  async function copyReferralUrl() {
+    const referralUrl = getReferralUrl();
+    let copiedOk = false;
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      copiedOk = true;
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = referralUrl;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        ta.style.top = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        copiedOk = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (copiedOk) {
+      setReferralCopied(true);
+      window.setTimeout(() => setReferralCopied(false), 1500);
+    }
   }
 
   async function saveSlug() {
@@ -2448,10 +2485,7 @@ function Dashboard({
   }
 
   function renderRefer() {
-    const refSlug = memberPublicSlugSegment(myMember, profileForm.name, user?.name);
-    const referralLink = refSlug
-      ? `https://topmlmleaders.com?ref=${encodeURIComponent(refSlug)}`
-      : "https://topmlmleaders.com";
+    const referralUrl = getReferralUrl();
     const count = referralCount ?? 0;
     const goalFirstReward = 5;
     const progressPct = Math.min(100, Math.round((Math.min(count, goalFirstReward) / goalFirstReward) * 100));
@@ -2472,21 +2506,21 @@ function Dashboard({
           Share your link. When someone joins TopMLMLeaders from your link, it counts as a referral.
         </p>
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 10, marginBottom: 10, wordBreak: "break-all", fontSize: 14 }}>
-          {referralLink}
+          {referralUrl}
         </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
           <button
             type="button"
-            onClick={async () => navigator.clipboard.writeText(referralLink)}
+            onClick={() => void copyReferralUrl()}
             style={{ border: "1px solid var(--color-border)", background: "#FFFFFF", borderRadius: 10, padding: "8px 10px", fontWeight: 700 }}
           >
-            Copy link
+            {referralCopied ? "Copied!" : "Copy link"}
           </button>
           <button
             type="button"
             onClick={() =>
               window.open(
-                `https://wa.me/?text=${encodeURIComponent(`Join me on TopMLMLeaders: ${referralLink}`)}`,
+                `https://wa.me/?text=${encodeURIComponent(`Join me on TopMLMLeaders: ${referralUrl}`)}`,
                 "_blank",
                 "noopener"
               )
