@@ -654,18 +654,119 @@ function Home({
       {activeTab === "plans" ? <Plans /> : null}
       <footer
         style={{
-          padding: "20px 16px calc(20px + env(safe-area-inset-bottom))",
+          padding: "24px 16px calc(24px + env(safe-area-inset-bottom))",
           textAlign: "center",
           borderTop: "1px solid var(--color-border)",
           marginTop: "auto",
+          background: "#FFFFFF",
         }}
       >
-        <Link to="/privacy" style={{ color: "var(--color-muted)", fontSize: 12, marginRight: 16 }}>
-          Privacy Policy
-        </Link>
-        <Link to="/terms" style={{ color: "var(--color-muted)", fontSize: 12 }}>
-          Terms &amp; Conditions
-        </Link>
+        {/* Logo + Tagline */}
+        <div style={{ marginBottom: 12 }}>
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: 16,
+              color: "var(--color-primary)",
+            }}
+          >
+            🏆 TopMLMLeaders.com
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--color-muted)",
+              marginTop: 4,
+            }}
+          >
+            AI Powered Search · Connect · Grow Worldwide
+          </div>
+        </div>
+
+        {/* YouTube */}
+        <div style={{ marginBottom: 14 }}>
+          <a
+            href="https://www.youtube.com/@DirectoryMLM"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "#FF0000",
+              color: "#FFFFFF",
+              borderRadius: 999,
+              padding: "6px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            ▶ YouTube
+          </a>
+        </div>
+
+        {/* Links */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: "8px 16px",
+            marginBottom: 14,
+          }}
+        >
+          <Link
+            to="/privacy"
+            style={{
+              color: "var(--color-muted)",
+              fontSize: 12,
+              textDecoration: "none",
+            }}
+          >
+            Privacy Policy
+          </Link>
+          <Link
+            to="/terms"
+            style={{
+              color: "var(--color-muted)",
+              fontSize: 12,
+              textDecoration: "none",
+            }}
+          >
+            Terms & Conditions
+          </Link>
+          <Link
+            to="/contact"
+            style={{
+              color: "var(--color-muted)",
+              fontSize: 12,
+              textDecoration: "none",
+            }}
+          >
+            Contact Us
+          </Link>
+          <Link
+            to="/contact?subject=advertise"
+            style={{
+              color: "var(--color-muted)",
+              fontSize: 12,
+              textDecoration: "none",
+            }}
+          >
+            Advertise
+          </Link>
+        </div>
+
+        {/* Copyright */}
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--color-muted)",
+          }}
+        >
+          © 2026 Digi Dream Ltd, Mumbai, India. All rights reserved.
+        </div>
       </footer>
     </div>
   );

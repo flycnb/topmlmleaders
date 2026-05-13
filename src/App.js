@@ -4,6 +4,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Terms from "./pages/Terms";
+import Contact from "./pages/Contact";
 import ProfilePage from "./pages/ProfilePage";
 import Dashboard from "./features/dashboard";
 import AdminPanel from "./features/admin";
@@ -233,6 +234,15 @@ function AppRoutes() {
           element={
             <>
               <Terms />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
+          path="/contact"
+          element={
+            <>
+              <Contact />
               {sharedModals}
             </>
           }
