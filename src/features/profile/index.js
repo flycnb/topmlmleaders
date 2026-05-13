@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { isContactAllowed, getContactMessage } from "../../lib/contactVisibility";
 import ShareSheet from "../../components/ShareSheet";
 import QRCodeModal from "../../components/QRCode";
 import FlagModal from "../flags/FlagModal";
@@ -230,8 +231,9 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
 
   const canEdit = Boolean(user?.id && user.id === liveMember.ownerId);
   const color = liveMember.color || "#6C63FF";
-  const phoneAllowed = liveMember.phoneVisibility === "public" || (user && liveMember.phoneVisibility !== "private");
-  const waAllowed = liveMember.waVisibility === "public" || (user && liveMember.waVisibility !== "private");
+  const viewerPlan = user?.plan || "free";
+  const phoneAllowed = isContactAllowed(liveMember.phoneVisibility, viewerPlan);
+  const waAllowed = isContactAllowed(liveMember.waVisibility, viewerPlan);
   const emailVis = liveMember.emailVisibility || liveMember.email_visibility;
   const emailAllowed =
     emailVis === "public" || (Boolean(user?.id) && emailVis !== "private");
@@ -329,7 +331,10 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
       onAuthRequired();
       return;
     }
-    if (!waAllowed) return;
+    if (!waAllowed) {
+      alert(getContactMessage(liveMember.waVisibility));
+      return;
+    }
     window.open(`https://wa.me/${String(liveMember.wa).replace(/[^\d]/g, "")}`, "_blank", "noopener");
   }
 
@@ -470,7 +475,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
                     return;
                   }
                   if (!phoneAllowed) {
-                    alert("🔒 This member has kept their phone number private.");
+                    alert(getContactMessage(liveMember.phoneVisibility));
                     return;
                   }
                   window.location.href = telHref;
@@ -494,7 +499,7 @@ function MemberProfile({ member, user, onAuthRequired, isFollowing, toggleFollow
                     return;
                   }
                   if (!waAllowed) {
-                    alert("🔒 This member has kept their WhatsApp private.");
+                    alert(getContactMessage(liveMember.waVisibility));
                     return;
                   }
                   window.open(`https://wa.me/${waDigits}`, "_blank", "noopener,noreferrer");

@@ -19,7 +19,7 @@ async function resolveReferrerUserIdFromSlug(currentUserId, rawSlug) {
 /**
  * Upsert public.users row, assign deterministic referral_code once, attach referred_by from ?ref= slug.
  */
-async function syncPublicUserRow(nextUser) {
+async function syncPublicUserRow(nextUser, setPlan) {
   const email = nextUser.email || "";
   const name =
     nextUser.user_metadata?.name ||
@@ -32,10 +32,20 @@ async function syncPublicUserRow(nextUser) {
       id: nextUser.id,
       name,
       email,
-      plan: "free",
     },
     { onConflict: "id" }
   );
+
+  try {
+    const { data: memberRow } = await supabase
+      .from("members")
+      .select("plan")
+      .eq("owner_id", nextUser.id)
+      .maybeSingle();
+    if (memberRow?.plan) setPlan(memberRow.plan);
+  } catch {
+    /* keep plan as "free" if fetch fails */
+  }
 
   const { data: row } = await supabase
     .from("users")
@@ -142,7 +152,7 @@ export function useAuth() {
       if (event === "INITIAL_SESSION") {
         applySessionAndFinishBootstrap(nextSession);
         if (nextSession?.user?.id) {
-          void syncPublicUserRow(nextSession.user);
+          void syncPublicUserRow(nextSession.user, setPlan);
         }
         return;
       }
@@ -152,8 +162,7 @@ export function useAuth() {
         const nextUser = nextSession?.user;
         if (nextUser?.id) {
           // Do not await — avoids competing with the home directory fetch right after OAuth redirect.
-          void syncPublicUserRow(nextUser);
-          setPlan("free");
+          void syncPublicUserRow(nextUser, setPlan);
         }
         return;
       }

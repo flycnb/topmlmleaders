@@ -1,5 +1,6 @@
 import React from "react";
 import Avatar from "./Avatar";
+import { isContactAllowed, getContactMessage } from "../lib/contactVisibility";
 
 function Star({ filled }) {
   return <span style={{ color: filled ? "#F59E0B" : "#D1D5DB", fontSize: 14 }}>★</span>;
@@ -14,6 +15,7 @@ function planBadge(plan) {
 function MemberCard({
   member,
   isLoggedIn,
+  viewerPlan,
   isFollowing,
   isBookmarked,
   onFollow,
@@ -23,7 +25,6 @@ function MemberCard({
   onViewProfile,
 }) {
   const badge = planBadge(member.plan);
-  const waPrivate = (member.wa_visibility || member.waVisibility || "public") === "private";
 
   const openWhatsApp = () => {
     if (!isLoggedIn) {
@@ -32,7 +33,10 @@ function MemberCard({
     }
     if (!member.wa) return;
     const vis = member.wa_visibility || member.waVisibility || "public";
-    if (vis === "private") return;
+    if (!isContactAllowed(vis, viewerPlan)) {
+      alert(getContactMessage(vis));
+      return;
+    }
     window.open(
       `https://wa.me/${String(member.wa).replace(/[^\d]/g, "")}`,
       "_blank",
@@ -145,7 +149,6 @@ function MemberCard({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
             <button
               type="button"
-              disabled={waPrivate}
               onClick={openWhatsApp}
               style={{
                 borderRadius: 10,
@@ -154,8 +157,7 @@ function MemberCard({
                 color: "#10B981",
                 fontWeight: 700,
                 padding: "8px 6px",
-                opacity: waPrivate ? 0.35 : 1,
-                cursor: waPrivate ? "default" : "pointer",
+                cursor: "pointer",
               }}
             >
               💬 Message

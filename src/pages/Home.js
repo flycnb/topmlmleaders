@@ -463,6 +463,7 @@ function Home({
                   key={member.id}
                   member={member}
                   isLoggedIn={Boolean(user)}
+                  viewerPlan={user?.plan || "free"}
                   isFollowing={isFollowing(member.id)}
                   isBookmarked={isBookmarked(member.id)}
                   onFollow={handleFollow}
