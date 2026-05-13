@@ -11,25 +11,11 @@ export default async function handler(req, res) {
     "https://qbhhgspznslxykmrkacx.supabase.co";
   const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-  // Real users → fetch and serve index.html from
-  // our own public URL (no fs dependency)
+  // Real users → redirect to /u-app/:slug so Vercel serves
+  // this deployment's index.html + hashed static assets (no fetch)
   if (!isBot) {
-    try {
-      const proto = req.headers["x-forwarded-proto"] || "https";
-      const host =
-        req.headers["x-forwarded-host"] ||
-        req.headers["host"] ||
-        "topmlmleaders.com";
-      const indexUrl = `${proto}://${host}/index.html`;
-      const indexRes = await fetch(indexUrl);
-      const html = await indexRes.text();
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store");
-      return res.status(200).send(html);
-    } catch {
-      res.setHeader("Location", "/");
-      return res.status(302).send("");
-    }
+    res.setHeader("Location", `/u-app/${encodeURIComponent(String(slug || ""))}`);
+    return res.status(302).end();
   }
 
   // Bots → fetch member and return OG meta tags

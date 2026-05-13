@@ -305,6 +305,21 @@ function AppRoutes() {
           }
         />
         <Route
+          path="/u-app/:slug"
+          element={
+            <>
+              <ProfilePage
+                user={user}
+                onAuthRequired={onAuthRequired}
+                isFollowing={isFollowing}
+                toggleFollow={toggleFollow}
+                onOpenChat={openChat}
+              />
+              {sharedModals}
+            </>
+          }
+        />
+        <Route
           path="/admin"
           element={
             <>

@@ -3,6 +3,10 @@
   "outputDirectory": "build",
   "rewrites": [
     {
+      "source": "/u-app/:slug",
+      "destination": "/index.html"
+    },
+    {
       "source": "/u/:slug",
       "destination": "/api/u/[slug]"
     },
