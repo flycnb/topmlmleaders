@@ -20,7 +20,7 @@ function copyMembersCache() {
 
 /** Directory list columns only — avoids huge rows (e.g. gallery json) slowing first load after OAuth. */
 const MEMBERS_DIRECTORY_SELECT =
-  "id,name,city,area,pin,country,company,role,rating,rating_count,phone,wa,photo_initials,avatar_url,youtube_url,color,slug,likes,verified,plan,badges,joined_date,team_size,earnings,follower_count,following_count,owner_id";
+  "id,name,city,area,pin,country,company,role,rating,rating_count,phone,wa,wa_visibility,phone_visibility,photo_initials,avatar_url,youtube_url,color,slug,likes,verified,plan,badges,joined_date,team_size,earnings,follower_count,following_count,owner_id";
 
 function filterMembersBySearch(members, searchTerm) {
   const q = String(searchTerm || "").trim().toLowerCase();
