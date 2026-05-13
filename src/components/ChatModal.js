@@ -1,10 +1,30 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useChat } from "../features/chat";
 
 function formatTime(value) {
   if (!value) return "";
   const date = new Date(value);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+  const timeStr = date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+  if (isToday) return timeStr;
+  return (
+    date.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+    }) +
+    " " +
+    timeStr
+  );
 }
 
 function ChatBubble({ message, isOwn }) {
@@ -51,7 +71,7 @@ function ChatModal({ open, onClose, user, member }) {
   const listRef = useRef(null);
   const { messages, sendMessage, loading, peerMissing, senderMissing, myMemberId } = useChat(user, member);
 
-  const onlineText = useMemo(() => "● Online", []);
+  const onlineText = null;
 
   useEffect(() => {
     if (!open || !listRef.current) return;
@@ -127,7 +147,9 @@ function ChatModal({ open, onClose, user, member }) {
             </div>
             <div>
               <div style={{ fontWeight: 700 }}>{member.name}</div>
-              <div style={{ color: "#10B981", fontSize: 12 }}>{onlineText}</div>
+              {onlineText ? (
+                <div style={{ color: "#10B981", fontSize: 12 }}>{onlineText}</div>
+              ) : null}
             </div>
           </div>
           <button

@@ -17,16 +17,21 @@ import { mapMembers } from "../search";
 const TABS = [
   "overview",
   "profile",
+  "messages",
+  "media",
   "services",
   "events",
   "team",
-  "media",
-  "messages",
   "bookmarks",
   "bookings",
   "settings",
   "refer & earn",
 ];
+
+const TAB_LABELS = {
+  messages: "Chat",
+  "refer & earn": "Refer & Earn",
+};
 
 const MAX_GALLERY_PHOTOS = 10;
 
@@ -400,7 +405,10 @@ function Dashboard({
           .from("conversations")
           .select("*")
           .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
-          .order("last_message_time", { ascending: false });
+          .order("last_message_time", {
+            ascending: false,
+            nullsFirst: false,
+          });
         const bookmarksPromise =
           memberRow?.id != null
             ? supabase
@@ -1468,7 +1476,10 @@ function Dashboard({
             .from("conversations")
             .select("*")
             .or(`member1_id.eq.${user.id},member2_id.eq.${user.id}`)
-            .order("last_message_time", { ascending: false });
+            .order("last_message_time", {
+              ascending: false,
+              nullsFirst: false,
+            });
           setConversations(convRes.data || []);
           setStats((prev) => ({ ...prev, messages: (convRes.data || []).length }));
           setSectionLoading((prev) => ({ ...prev, messages: false }));
@@ -2671,7 +2682,7 @@ function Dashboard({
         <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
           {[
             { key: "followers", icon: "👥", label: "Followers", value: stats.followers, tab: "overview" },
-            { key: "messages", icon: "💬", label: "Messages", value: stats.messages, tab: "messages" },
+            { key: "messages", icon: "💬", label: "Chat", value: stats.messages, tab: "messages" },
             { key: "bookmarks", icon: "🔖", label: "Bookmarks", value: stats.bookmarks, tab: "bookmarks" },
             { key: "alerts", icon: "🔔", label: "Alerts", value: unreadCount, tab: "overview" },
           ].map((item) => (
@@ -2719,7 +2730,7 @@ function Dashboard({
                   textTransform: "capitalize",
                 }}
               >
-                {tab}
+                {TAB_LABELS[tab] || tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
