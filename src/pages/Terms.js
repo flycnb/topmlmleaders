@@ -39,6 +39,9 @@ export default function Terms() {
 
       <section style={section}>
         <p style={p}>By using TopMLMLeaders.com you agree to these terms.</p>
+        <p style={{ ...p, marginTop: 12 }}>
+          TopMLMLeaders.com is owned and operated by Digi Dream (Proprietorship), Mumbai, India. Brand name: TopMLMLeaders. Contact: digidreamltd@gmail.com
+        </p>
       </section>
 
       <section style={section}>
@@ -59,11 +62,39 @@ export default function Terms() {
       </section>
 
       <section style={section}>
-        <h2 style={h2}>Payments</h2>
+        <h2 style={h2}>Payments & Subscriptions</h2>
         <ul style={ul}>
-          <li>Subscription fees are non-refundable after 7 days</li>
-          <li>Plans auto-renew unless cancelled</li>
+          <li>All payments are processed securely via Razorpay</li>
+          <li>Plans are available monthly and yearly</li>
+          <li>
+            Pricing:
+            <ul style={{ marginTop: 6, paddingLeft: 20, color: "var(--color-text)", fontSize: 15, lineHeight: 1.65 }}>
+              <li>Pro — ₹1,499/year or ₹149/month</li>
+              <li>Elite — ₹3,999/year or ₹399/month</li>
+              <li>Company — ₹7,999/year or ₹799/month</li>
+            </ul>
+          </li>
+          <li>Plans auto-renew unless cancelled before renewal date</li>
+          <li>You can cancel anytime from your dashboard settings</li>
         </ul>
+      </section>
+
+      <section style={section}>
+        <h2 style={h2}>Refund Policy</h2>
+        <ul style={ul}>
+          <li>Refund requests within 7 days of payment will be honoured in full</li>
+          <li>No refunds after 7 days of purchase</li>
+          <li>To request a refund contact us at digidreamltd@gmail.com with your payment details</li>
+          <li>Refunds will be processed within 5-7 business days to original payment method</li>
+        </ul>
+      </section>
+
+      <section style={section}>
+        <h2 style={h2}>Governing Law</h2>
+        <p style={p}>
+          These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in Mumbai, Maharashtra,
+          India.
+        </p>
       </section>
 
       <section style={section}>

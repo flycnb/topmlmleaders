@@ -70,6 +70,33 @@ export default function PrivacyPolicy() {
       </section>
 
       <section style={section}>
+        <h2 style={h2}>Payment Information</h2>
+        <ul style={ul}>
+          <li>Payments are processed securely by Razorpay (razorpay.com)</li>
+          <li>We do not store your card or banking information on our servers</li>
+          <li>All transactions are encrypted and PCI-DSS compliant</li>
+          <li>Your payment data is handled solely by Razorpay</li>
+        </ul>
+      </section>
+
+      <section style={section}>
+        <h2 style={h2}>Data Security</h2>
+        <ul style={ul}>
+          <li>All data is stored securely on Supabase cloud servers</li>
+          <li>We use industry-standard SSL encryption for all connections</li>
+          <li>We regularly review our security practices to protect your data</li>
+        </ul>
+      </section>
+
+      <section style={section}>
+        <h2 style={h2}>Governing Law</h2>
+        <p style={p}>
+          This Privacy Policy is governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in Mumbai,
+          Maharashtra, India.
+        </p>
+      </section>
+
+      <section style={section}>
         <h2 style={h2}>Contact</h2>
         <p style={p}>
           <a href="mailto:digidreamltd@gmail.com" style={{ color: "var(--color-primary)", fontWeight: 600 }}>
