@@ -1,38 +1,44 @@
-const CACHE_NAME = "topmlm-v1";
+const CACHE_VERSION = "topmlm-static-v2";
+const CACHE_NAME = `topmlm-${CACHE_VERSION}`;
+
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-  "/logo192.png",
-  "/logo512.png",
+  "/manifest.json", 
+  "/logo192.png", 
+  "/logo512.png"
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => 
+      cache.addAll(STATIC_ASSETS))
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => 
+        caches.delete(k)));
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(STATIC_ASSETS);
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = event.request.url;
+  const req = event.request;
+  const url = req.url;
 
-  // Never cache — Supabase, auth, API, realtime
+  if (req.method !== "GET") return;
+
+  // NEVER intercept HTML documents
+  if (req.destination === "document" || 
+      req.mode === "navigate") return;
+
+  // NEVER intercept Supabase or API
   if (
     url.includes("supabase.co") ||
     url.includes("/api/") ||
@@ -43,15 +49,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never cache POST requests
-  if (event.request.method !== "GET") {
-    return;
-  }
+  // Only cache specific static assets
+  const path = new URL(url).pathname;
+  const isStaticAllowlist =
+    path === "/manifest.json" ||
+    path === "/logo192.png" ||
+    path === "/logo512.png";
 
-  // Cache first for static assets
+  if (!isStaticAllowlist) return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
-    })
+    caches.match(req).then((cached) => 
+      cached || fetch(req))
   );
 });
