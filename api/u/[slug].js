@@ -1,22 +1,41 @@
-function escapeAttr(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 export default async function handler(req, res) {
   const { slug } = req.query;
+  const ua = String(req.headers["user-agent"] || "");
 
-  // Fetch member from Supabase
-  const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL ||
+  const isBot =
+    /whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingpreview|embedly/i
+    .test(ua);
+
+  const SUPABASE_URL =
+    process.env.REACT_APP_SUPABASE_URL ||
     "https://qbhhgspznslxykmrkacx.supabase.co";
   const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
+  // Real users → fetch and serve index.html from
+  // our own public URL (no fs dependency)
+  if (!isBot) {
+    try {
+      const proto = req.headers["x-forwarded-proto"] || "https";
+      const host =
+        req.headers["x-forwarded-host"] ||
+        req.headers["host"] ||
+        "topmlmleaders.com";
+      const indexUrl = `${proto}://${host}/index.html`;
+      const indexRes = await fetch(indexUrl);
+      const html = await indexRes.text();
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).send(html);
+    } catch {
+      res.setHeader("Location", "/");
+      return res.status(302).send("");
+    }
+  }
+
+  // Bots → fetch member and return OG meta tags
   let member = null;
   try {
-    const response = await fetch(
+    const r = await fetch(
       `${SUPABASE_URL}/rest/v1/members?slug=eq.${encodeURIComponent(slug)}&select=name,role,company,city,country,avatar_url,follower_count,rating,slug&limit=1`,
       {
         headers: {
@@ -25,17 +44,22 @@ export default async function handler(req, res) {
         },
       }
     );
-    const data = await response.json();
+    const data = await r.json();
     member = data?.[0] || null;
   } catch {
     member = null;
   }
 
-  // Build OG values
+  function escapeAttr(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
   const siteUrl = "https://topmlmleaders.com";
-  const profileUrl = member?.slug
-    ? `${siteUrl}/u/${member.slug}`
-    : siteUrl;
+  const profileUrl = `${siteUrl}/u/${slug}`;
 
   const title = member
     ? `${member.name} 🏆 ${[member.role, member.company]
@@ -59,40 +83,14 @@ export default async function handler(req, res) {
         .join(" · ")
     : "Find and connect with top MLM leaders worldwide";
 
-  const image = member?.avatar_url
-    ? member.avatar_url
-    : `${siteUrl}/logo192.png`;
+  const image = member?.avatar_url || `${siteUrl}/logo192.png`;
 
-  const ua = String(req.headers["user-agent"] || "").toLowerCase();
-  const isBot =
-    /facebookexternalhit|facebot|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingpreview|embedly/i
-    .test(ua);
-
-  // Real users → serve built index.html directly
-  if (!isBot) {
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const indexPath = path.join(process.cwd(), "build", "index.html");
-      const html = fs.readFileSync(indexPath, "utf8");
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(html);
-    } catch {
-      res.setHeader("Location", "/");
-      return res.status(302).send("");
-    }
-  }
-
-  // Return HTML with OG tags + React app loads normally
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>${title}</title>
-  <meta name="description" content="${description}" />
-
-  <!-- Open Graph (WhatsApp, Facebook, Telegram) -->
+  <title>${escapeAttr(title)}</title>
+  <meta name="description" content="${escapeAttr(description)}" />
   <meta property="og:type" content="profile" />
   <meta property="og:url" content="${escapeAttr(profileUrl)}" />
   <meta property="og:title" content="${escapeAttr(title)}" />
@@ -101,24 +99,15 @@ export default async function handler(req, res) {
   <meta property="og:image:width" content="400" />
   <meta property="og:image:height" content="400" />
   <meta property="og:site_name" content="TopMLMLeaders.com" />
-
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="${escapeAttr(title)}" />
   <meta name="twitter:description" content="${escapeAttr(description)}" />
   <meta name="twitter:image" content="${escapeAttr(image)}" />
-
-  <meta name="theme-color" content="#6C63FF" />
-  <link rel="stylesheet" 
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" />
-  <link rel="manifest" href="/manifest.json" />
 </head>
 <body>
-  <noscript>You need to enable JavaScript to run this app.</noscript>
-  <div id="root"></div>
-  <script src="/static/js/main.chunk.js"></script>
-  <script src="/static/js/vendors~main.chunk.js"></script>
-  <script src="/static/js/bundle.js"></script>
+  <p>${escapeAttr(title)}</p>
+  <p>${escapeAttr(description)}</p>
+  <a href="${escapeAttr(profileUrl)}">View Profile</a>
 </body>
 </html>`;
 
