@@ -145,15 +145,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
   }
 
-  const webhookSecret = Deno.env.get("SEND_PUSH_WEBHOOK_SECRET");
-  if (webhookSecret) {
-    const auth = req.headers.get("Authorization") ?? "";
-    const expected = `Bearer ${webhookSecret}`;
-    if (auth !== expected) {
-      return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
-    }
-  }
-
   let payload: { type?: string; table?: string; record?: NotificationRow };
   try {
     payload = (await req.json()) as typeof payload;
