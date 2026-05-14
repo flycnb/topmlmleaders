@@ -4,3 +4,6 @@
 # could block or confuse the gateway for some clients. Redeploy ai-search after changing.
 [functions.ai-search]
 verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
