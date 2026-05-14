@@ -4,27 +4,31 @@ import { useChat } from "../features/chat";
 function formatTime(value) {
   if (!value) return "";
   const date = new Date(value);
-  const now = new Date();
-  const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
-  const timeStr = date.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
+  if (Number.isNaN(date.getTime())) return "";
+
+  const dayKey = (d) =>
+    new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+
+  const isToday = dayKey(date) === dayKey(new Date());
+
+  const timeStr = date.toLocaleTimeString([], {
+    hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: "Asia/Kolkata",
   });
+
   if (isToday) return timeStr;
-  return (
-    date.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      timeZone: "Asia/Kolkata",
-    }) +
-    " " +
-    timeStr
-  );
+
+  const datePart = date.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+  });
+
+  return `${datePart} ${timeStr}`;
 }
 
 function ChatBubble({ message, isOwn }) {
