@@ -11,7 +11,7 @@
       "destination": "/api/u/[slug]"
     },
     {
-      "source": "/((?!api/|static/|manifest\\.json|favicon\\.ico|faviconicon\\.ico|logo192\\.png|logo512\\.png|logo\\.png|robots\\.txt|sw\\.js|_redirects).*)",
+      "source": "/((?!api/|static/|manifest\\.json|favicon\\.ico|faviconicon\\.ico|logo192\\.png|logo512\\.png|logo\\.png|robots\\.txt|sw\\.js|firebase-messaging-sw\\.js|_redirects).*)",
       "destination": "/index.html"
     }
   ]

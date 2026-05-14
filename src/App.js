@@ -16,6 +16,7 @@ import { useBookmarks } from "./features/bookmarks/useBookmarks";
 import { supabase } from "./lib/supabaseClient";
 import { PENDING_REF_STORAGE_KEY } from "./lib/referrals";
 import { mapMembers } from "./features/search";
+import { requestNotificationPermission, onForegroundMessage } from "./lib/firebase";
 
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
 
@@ -124,6 +125,33 @@ function AppRoutes() {
     }
     hadUserRef.current = Boolean(user?.id);
   }, [user?.id, navigate]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    async function setupPush() {
+      try {
+        const token = await requestNotificationPermission();
+        if (!token) return;
+        await supabase.from("users").update({ fcm_token: token }).eq("id", user.id);
+      } catch {
+        /* silent — push is optional */
+      }
+    }
+    setupPush();
+
+    const unsub = onForegroundMessage((payload) => {
+      const { title, body } = payload.notification || {};
+      if (title || body) {
+        if (Notification.permission === "granted") {
+          new Notification(title || "TopMLMLeaders", {
+            body: body || "",
+            icon: "/logo192.png",
+          });
+        }
+      }
+    });
+    return () => unsub?.();
+  }, [user?.id]);
 
   function onAuthRequired() {
     setShowAuth(true);
