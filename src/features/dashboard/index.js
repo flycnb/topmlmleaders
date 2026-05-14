@@ -2263,7 +2263,7 @@ function Dashboard({
   function renderBookmarks() {
     return (
       <section style={{ background: "#FFFFFF", borderRadius: 14, padding: 14, boxShadow: "var(--shadow-card)" }}>
-        <h3 style={{ margin: "0 0 10px" }}>Bookmarks</h3>
+        <h3 style={{ margin: "0 0 10px" }}>Saved</h3>
         <input
           value={bookmarkSearch}
           onChange={(event) => setBookmarkSearch(event.target.value)}
@@ -2683,7 +2683,7 @@ function Dashboard({
           {[
             { key: "followers", icon: "👥", label: "Followers", value: stats.followers, tab: "overview" },
             { key: "messages", icon: "💬", label: "Chat", value: stats.messages, tab: "messages" },
-            { key: "bookmarks", icon: "🔖", label: "Bookmarks", value: stats.bookmarks, tab: "bookmarks" },
+            { key: "bookmarks", icon: "🔖", label: "Saved", value: stats.bookmarks, tab: "bookmarks" },
             { key: "alerts", icon: "🔔", label: "Alerts", value: unreadCount, tab: "overview" },
           ].map((item) => (
             <button

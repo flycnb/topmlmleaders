@@ -167,7 +167,7 @@ function MemberCard({
               onClick={onBookmarkClick}
               style={{ borderRadius: 10, border: "1px solid var(--color-border)", background: "#FFFFFF", color: "var(--color-text)", fontWeight: 700, padding: "8px 6px", cursor: "pointer" }}
             >
-              {isBookmarked ? "🔖 Saved" : "🔖 Bookmark"}
+              {isBookmarked ? "🔖 Saved" : "🔖 Save"}
             </button>
             <button
               type="button"

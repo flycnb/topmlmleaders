@@ -50,6 +50,33 @@ function AppRoutes() {
   const { isFollowing, toggleFollow } = useFollow(user, () => setShowAuth(true));
   const { isBookmarked, toggleBookmark } = useBookmarks(user, () => setShowAuth(true));
   const hadUserRef = useRef(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      const dismissed = localStorage.getItem("pwa-install-dismissed");
+      if (!dismissed) setShowInstallBanner(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  function handleInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.then(() => {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    });
+  }
+
+  function handleDismiss() {
+    setShowInstallBanner(false);
+    localStorage.setItem("pwa-install-dismissed", "true");
+  }
 
   useEffect(() => {
     captureReferralFromUrl();
@@ -344,6 +371,77 @@ function AppRoutes() {
           }
         />
       </Routes>
+      {showInstallBanner ? (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 99999,
+            background: "#FFFFFF",
+            borderTop: "1px solid #E5E7EB",
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+            padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div style={{ fontSize: 32 }}>🏆</div>
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: 15,
+                color: "#1A1A2E",
+              }}
+            >
+              Install TopMLMLeaders
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: "#6B7280",
+                marginTop: 2,
+              }}
+            >
+              Add to home screen for best experience
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            style={{
+              border: "none",
+              background: "none",
+              fontSize: 20,
+              color: "#9CA3AF",
+              cursor: "pointer",
+              padding: "4px 8px",
+            }}
+          >
+            ✕
+          </button>
+          <button
+            type="button"
+            onClick={handleInstall}
+            style={{
+              border: "none",
+              borderRadius: 999,
+              background: "var(--color-primary, #6C63FF)",
+              color: "#FFFFFF",
+              fontWeight: 700,
+              padding: "10px 16px",
+              fontSize: 14,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Install
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }
