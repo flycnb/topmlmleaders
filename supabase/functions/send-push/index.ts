@@ -21,17 +21,17 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function pemToPkcs8Bytes(pem: string): Uint8Array {
-  const lines = pem
-    .replace(/\r\n/g, "\n")
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const b64 = lines.join("");
+  const normalized = pem.replace(/\r\n/g, "\n");
+  const body = normalized
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\n/g, "")
+    .trim();
+  const b64 = body.replace(/\s+/g, "");
   const binary = atob(b64);
   const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++)
+    out[i] = binary.charCodeAt(i);
   return out;
 }
 
@@ -83,7 +83,16 @@ async function getGoogleAccessToken(): Promise<string> {
   const clientEmail = Deno.env.get("FIREBASE_CLIENT_EMAIL");
   let privateKey = Deno.env.get("FIREBASE_PRIVATE_KEY");
   if (!projectId || !clientEmail || !privateKey) {
-    throw new Error("Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY");
+    throw new Error(
+      "Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY"
+    );
+  }
+  privateKey = privateKey.trim();
+  if (
+    (privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+    (privateKey.startsWith("'") && privateKey.endsWith("'"))
+  ) {
+    privateKey = privateKey.slice(1, -1).trim();
   }
   privateKey = privateKey.replace(/\\n/g, "\n");
 
