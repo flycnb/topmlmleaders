@@ -17,11 +17,11 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const { title, body, icon } = payload.notification || {};
+  const { title, body } = payload.notification || {};
   self.registration.showNotification(title || "TopMLMLeaders", {
     body: body || "You have a new notification",
-    icon: icon || "/logo192.png",
-    badge: "/logo192.png",
+    icon: "/logo192-notify.png",
+    badge: "/logo192-notify.png",
     data: payload.data || {},
   });
 });

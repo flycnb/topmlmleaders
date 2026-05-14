@@ -70,6 +70,15 @@ export function useNotifications(user) {
     [notifications]
   );
 
+  useEffect(() => {
+    if (!("setAppBadge" in navigator)) return;
+    if (unreadCount > 0) {
+      navigator.setAppBadge(unreadCount).catch(() => {});
+    } else {
+      navigator.clearAppBadge().catch(() => {});
+    }
+  }, [unreadCount]);
+
   return { notifications, unreadCount, markAllRead, markOneRead, loading };
 }
 

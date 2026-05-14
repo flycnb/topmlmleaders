@@ -153,6 +153,42 @@ function AppRoutes() {
     return () => unsub?.();
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    function handleHashChat(hash) {
+      const h = String(hash || window.location.hash).trim();
+      if (!h.startsWith("#/m/")) return;
+      const slug = h
+        .replace(/^#\/m\//i, "")
+        .split("?")[0]
+        .split("#")[0]
+        .trim();
+      if (!slug) return;
+      supabase
+        .from("members")
+        .select("*")
+        .or(`slug.eq.${slug},id.eq.${slug}`)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!data) return;
+          const mapped = mapMembers([data])[0];
+          if (mapped) {
+            openChat(mapped);
+            window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          }
+        });
+    }
+
+    handleHashChat(window.location.hash);
+
+    function onHashChange() {
+      handleHashChat(window.location.hash);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [user?.id]);
+
   function onAuthRequired() {
     setShowAuth(true);
   }
