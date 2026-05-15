@@ -17,8 +17,11 @@ export async function requestNotificationPermission() {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
+    const registration = await navigator
+      .serviceWorker.ready;
     const token = await getToken(messaging, {
       vapidKey: process.env.REACT_APP_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: registration,
     });
     return token;
   } catch {

@@ -132,7 +132,11 @@ function AppRoutes() {
       try {
         const token = await requestNotificationPermission();
         if (!token) return;
-        await supabase.from("users").update({ fcm_token: token }).eq("id", user.id);
+        await supabase.from("users")
+          .upsert(
+            { id: user.id, fcm_token: token },
+            { onConflict: "id", ignoreDuplicates: false }
+          );
       } catch {
         /* silent — push is optional */
       }
