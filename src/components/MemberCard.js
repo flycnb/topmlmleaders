@@ -1,6 +1,45 @@
 import React from "react";
-import Avatar from "./Avatar";
 import { isContactAllowed, getContactMessage } from "../lib/contactVisibility";
+
+function MemberAvatar({ avatarUrl, initials, color = "#6C63FF", size = 56 }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={initials || "Avatar"}
+        loading="lazy"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          objectFit: "cover",
+          border: "3px solid #FFFFFF",
+          background: "#FFFFFF",
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: "3px solid #FFFFFF",
+        background: `linear-gradient(135deg, ${color}, #4338ca)`,
+        color: "#FFFFFF",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 800,
+        fontSize: Math.round(size * 0.33),
+      }}
+    >
+      {String(initials || "ML").slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
 
 function Star({ filled }) {
   return <span style={{ color: filled ? "#F59E0B" : "#D1D5DB", fontSize: 14 }}>★</span>;
@@ -105,7 +144,7 @@ function MemberCard({
       </div>
 
       <div style={{ marginTop: -28, padding: "0 14px 14px" }}>
-        <Avatar avatarUrl={member.avatarUrl} initials={member.initials} color={member.color} size={56} />
+        <MemberAvatar avatarUrl={member.avatarUrl} initials={member.initials} color={member.color} size={56} />
         <div style={{ marginTop: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>{member.name}</h3>

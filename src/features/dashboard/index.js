@@ -2679,7 +2679,7 @@ function Dashboard({
       </header>
 
       <main style={{ padding: 16 }}>
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 10, marginBottom: 14 }}>
           {[
             { key: "followers", icon: "👥", label: "Followers", value: stats.followers, tab: "overview" },
             { key: "messages", icon: "💬", label: "Chat", value: stats.messages, tab: "messages" },
