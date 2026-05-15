@@ -1,18 +1,59 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useChat } from "../features/chat";
 
+/** Supabase timestamptz often arrives without Z; naive strings are UTC. */
+function parseMessageTimestamp(value) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const iso = raw.includes("T") ? raw : raw.replace(" ", "T");
+
+  if (/[zZ]$/.test(iso)) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (/[+-]\d{2}:\d{2}(?::\d{2})?$/.test(iso)) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (/[+-]\d{2}$/.test(iso)) {
+    const d = new Date(iso.replace(/([+-]\d{2})$/, "$1:00"));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const naive = iso.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/
+  );
+  if (naive) {
+    const [, y, mo, d, h, mi, sec = "0", frac] = naive;
+    const ms = frac ? Math.round(Number(`0.${frac}`) * 1000) : 0;
+    return new Date(
+      Date.UTC(
+        Number(y),
+        Number(mo) - 1,
+        Number(d),
+        Number(h),
+        Number(mi),
+        Number(sec),
+        ms
+      )
+    );
+  }
+
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
 function formatTime(value) {
-  if (!value) return "";
-  const raw = typeof value === "string"
-    ? value.trim()
-    : value;
-  const normalized = typeof raw === "string" &&
-    !raw.endsWith("Z") &&
-    !/[+-]\d{2}:?\d{2}$/.test(raw)
-    ? raw.replace(" ", "T") + "Z"
-    : raw;
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseMessageTimestamp(value);
+  if (!date) return "";
 
   const dayKey = (d) =>
     new Intl.DateTimeFormat("en-CA", {
