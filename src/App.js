@@ -192,6 +192,7 @@ function AppRoutes() {
     }
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   function onAuthRequired() {
