@@ -3,7 +3,15 @@ import { useChat } from "../features/chat";
 
 function formatTime(value) {
   if (!value) return "";
-  const date = new Date(value);
+  const raw = typeof value === "string"
+    ? value.trim()
+    : value;
+  const normalized = typeof raw === "string" &&
+    !raw.endsWith("Z") &&
+    !/[+-]\d{2}:?\d{2}$/.test(raw)
+    ? raw.replace(" ", "T") + "Z"
+    : raw;
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return "";
 
   const dayKey = (d) =>
