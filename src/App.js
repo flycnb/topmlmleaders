@@ -145,7 +145,8 @@ function AppRoutes() {
         if (Notification.permission === "granted") {
           new Notification(title || "TopMLMLeaders", {
             body: body || "",
-            icon: "/logo192.png",
+            icon: "/logo192-notify.png",
+            badge: "/logo192-notify.png",
           });
         }
       }
