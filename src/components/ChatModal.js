@@ -1,62 +1,33 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useChat } from "../features/chat";
 
-/** Supabase timestamptz often arrives without Z; naive strings are UTC. */
 function parseMessageTimestamp(value) {
-  if (value == null || value === "") return null;
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  const iso = raw.includes("T") ? raw : raw.replace(" ", "T");
-
-  if (/[zZ]$/.test(iso)) {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-
-  if (/[+-]\d{2}:\d{2}(?::\d{2})?$/.test(iso)) {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-
-  if (/[+-]\d{2}$/.test(iso)) {
-    const d = new Date(iso.replace(/([+-]\d{2})$/, "$1:00"));
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-
-  const naive = iso.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const s = String(value).trim();
+  const naive = s.match(
+    /^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2}):(\d{2})/
   );
   if (naive) {
-    const [, y, mo, d, h, mi, sec = "0", frac] = naive;
-    const ms = frac ? Math.round(Number(`0.${frac}`) * 1000) : 0;
-    return new Date(
-      Date.UTC(
-        Number(y),
-        Number(mo) - 1,
-        Number(d),
-        Number(h),
-        Number(mi),
-        Number(sec),
-        ms
-      )
-    );
+    return new Date(Date.UTC(
+      +naive[1], +naive[2]-1, +naive[3],
+      +naive[4], +naive[5], +naive[6]
+    ));
   }
-
-  const fallback = new Date(raw);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
+  return new Date(s);
 }
 
 function formatTime(value) {
+  if (!value) return "";
   const date = parseMessageTimestamp(value);
-  if (!date) return "";
+  if (!date || Number.isNaN(date.getTime()))
+    return "";
+
+  const tz = "Asia/Kolkata";
 
   const dayKey = (d) =>
     new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -64,17 +35,19 @@ function formatTime(value) {
 
   const isToday = dayKey(date) === dayKey(new Date());
 
-  const timeStr = date.toLocaleTimeString([], {
+  const timeStr = date.toLocaleTimeString("en-IN", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: tz,
   });
 
   if (isToday) return timeStr;
 
-  const datePart = date.toLocaleDateString([], {
+  const datePart = date.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
+    timeZone: tz,
   });
 
   return `${datePart} ${timeStr}`;
